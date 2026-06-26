@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Dash Tracker</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🤖</text></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 Geometry Dash Tracker</h1>
+            <p class="subtitle">Track your goals and beaten demons</p>
+            <div class="header-user">
+                <div class="header-avatar" id="headerAvatar" aria-label="Profile picture preview"></div>
+                <div class="header-meta" id="welcomeMessage">Welcome, Player</div>
+            </div>
+        </header>
+
+        <!-- Navigation Menu -->
+        <nav class="nav-menu">
+            <button class="nav-btn active" onclick="switchPage('dashboard')">⚡ Dashboard</button>
+            <button class="nav-btn" onclick="switchPage('goals')">📋 Goals</button>
+            <button class="nav-btn" onclick="switchPage('demons')">👹 Demons</button>
+            <button class="nav-btn" onclick="switchPage('practice')">🏋️ Practice</button>
+            <button class="nav-btn" onclick="switchPage('weakness')">🎯 Weakness</button>
+            <button class="nav-btn" onclick="switchPage('timeline')">📅 Timeline</button>
+            <button class="nav-btn" onclick="switchPage('stats')">📊 Stats</button>
+            <button class="nav-btn" onclick="switchPage('tools')">🛠️ Tools</button>
+            <button class="nav-btn" onclick="switchPage('settings')">⚙️ Settings</button>
+        </nav>
+
+        <div class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <section class="section quick-stats-section">
+                    <h2>⚡ Quick Stats</h2>
+                    <div class="quick-stats-grid">
+                        <div class="quick-stat">
+                            <div class="quick-stat-label">Demon Streak</div>
+                            <div class="quick-stat-value" id="demonStreak">0</div>
+                        </div>
+                        <div class="quick-stat">
+                            <div class="quick-stat-label">Recently Beaten</div>
+                            <div class="quick-stat-value" id="recentlyBeaten">-</div>
+                        </div>
+                        <div class="quick-stat">
+                            <div class="quick-stat-label">Hardest Demon</div>
+                            <div class="quick-stat-value" id="hardestDemon">-</div>
+                        </div>
+                        <div class="quick-stat">
+                            <div class="quick-stat-label">Most Attempts</div>
+                            <div class="quick-stat-value" id="mostAttempts">0</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section stats-section">
+                    <h2>📊 Main Statistics</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Goals</div>
+                            <div class="stat-value" id="totalGoals">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Demons</div>
+                            <div class="stat-value" id="totalDemons">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Practice Sessions</div>
+                            <div class="stat-value" id="totalSessions">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Easy Demons</div>
+                            <div class="stat-value" id="easyCount">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Medium Demons</div>
+                            <div class="stat-value" id="mediumCount">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Hard Demons</div>
+                            <div class="stat-value" id="hardCount">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Insane Demons</div>
+                            <div class="stat-value" id="insaneCount">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Extreme Demons</div>
+                            <div class="stat-value" id="extremeCount">0</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>🎯 Latest Activity</h2>
+                    <div id="recentActivity" class="activity-list">
+                        <!-- Recent activity will appear here -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Goals Page -->
+            <div id="goals-page" class="page">
+                <section class="section goals-section">
+                    <div class="section-header">
+                        <h2>📋 Goals</h2>
+                        <span class="goal-count" id="goalCount">0</span>
+                    </div>
+
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="goalInput" 
+                            placeholder="Enter a goal (e.g., Beat Bloodbath)" 
+                            maxlength="100"
+                        >
+                        <button onclick="addGoal()" class="btn btn-primary">Add Goal</button>
+                    </div>
+
+                    <ul id="goalsList" class="items-list goals-list">
+                        <!-- Goals will be added here -->
+                    </ul>
+
+                    <button onclick="clearGoals()" class="btn btn-danger btn-small">Clear All Goals</button>
+                </section>
+            </div>
+
+            <!-- Demons Page -->
+            <div id="demons-page" class="page">
+                <section class="section demons-section">
+                    <div class="section-header">
+                        <h2>👹 Beaten Demons</h2>
+                        <span class="demon-count" id="demonCount">0</span>
+                    </div>
+
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="demonInput" 
+                            placeholder="Enter demon name (e.g., The Lightning Road)" 
+                            maxlength="100"
+                        >
+                        <select id="difficultySelect" class="difficulty-select">
+                            <option value="Easy">Easy Demon</option>
+                            <option value="Medium">Medium Demon</option>
+                            <option value="Hard">Hard Demon</option>
+                            <option value="Insane">Insane Demon</option>
+                            <option value="Extreme">Extreme Demon</option>
+                        </select>
+                        <input 
+                            type="number" 
+                            id="attemptsInput" 
+                            placeholder="Attempts (optional)" 
+                            min="1"
+                            value="1"
+                        >
+                        <input 
+                            type="number" 
+                            id="percentageInput" 
+                            placeholder="Percentage (0-100)" 
+                            min="0"
+                            max="100"
+                            value="100"
+                        >
+                        <button onclick="showDemonModal()" class="btn btn-success">Add Demon</button>
+                    </div>
+
+                    <div id="demonsList" class="demons-list">
+                        <!-- Demons will be grouped by difficulty here -->
+                    </div>
+
+                    <div class="button-group">
+                        <button onclick="clearDemons()" class="btn btn-danger btn-small">Clear All Demons</button>
+                        <button onclick="exportData()" class="btn btn-primary btn-small">📥 Export Data</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Practice Sessions Page -->
+            <div id="practice-page" class="page">
+                <section class="section practice-section">
+                    <div class="section-header">
+                        <h2>🏋️ Practice Sessions</h2>
+                        <span class="session-count" id="sessionCount">0</span>
+                    </div>
+
+                    <div class="input-group">
+                        <input 
+                            type="number" 
+                            id="minutesInput" 
+                            placeholder="Minutes practiced" 
+                            min="1"
+                            value="30"
+                        >
+                        <input 
+                            type="text" 
+                            id="levelNameInput" 
+                            placeholder="Level name (optional)" 
+                            maxlength="100"
+                        >
+                        <input 
+                            type="text" 
+                            id="practiceNotes" 
+                            placeholder="What did you practice? (e.g., Wave sections)" 
+                            maxlength="100"
+                        >
+                        <button onclick="addPracticeSession()" class="btn btn-primary">Log Session</button>
+                    </div>
+
+                    <div class="session-stats">
+                        <div class="session-stat-card">
+                            <div class="stat-label">Total Minutes</div>
+                            <div class="stat-value" id="totalMinutes">0</div>
+                        </div>
+                        <div class="session-stat-card">
+                            <div class="stat-label">Avg Session</div>
+                            <div class="stat-value" id="avgMinutes">0</div>
+                        </div>
+                        <div class="session-stat-card">
+                            <div class="stat-label">Total Sessions</div>
+                            <div class="stat-value" id="totalSessionCount">0</div>
+                        </div>
+                    </div>
+
+                    <div id="sessionsList" class="sessions-list">
+                        <!-- Practice sessions will appear here -->
+                    </div>
+
+                    <button onclick="clearSessions()" class="btn btn-danger btn-small">Clear Sessions</button>
+                </section>
+            </div>
+
+            <!-- Weakness Tracker Page -->
+            <div id="weakness-page" class="page">
+                <section class="section weakness-section">
+                    <div class="section-header">
+                        <h2>🎯 Weakness Tracker</h2>
+                    </div>
+
+                    <p style="margin-bottom: 20px; font-size: 0.95em; color: #666;">Click on mechanics you struggle with to track them. Track your improvement over time!</p>
+
+                    <div class="weakness-grid" id="weaknessGrid">
+                        <!-- Weakness buttons will be generated here -->
+                    </div>
+
+                    <div class="weakness-stats">
+                        <h3>Weakness Statistics</h3>
+                        <div id="weaknessStats" class="weakness-stats-list">
+                            <!-- Stats will appear here -->
+                        </div>
+                    </div>
+
+                    <button onclick="resetWeaknesses()" class="btn btn-danger btn-small" style="margin-top: 20px;">Reset Weaknesses</button>
+                </section>
+            </div>
+
+            <!-- Timeline Page -->
+            <div id="timeline-page" class="page">
+                <section class="section timeline-section">
+                    <div class="section-header">
+                        <h2>📅 Progress Timeline</h2>
+                    </div>
+
+                    <div class="timeline-filters">
+                        <button class="timeline-filter active" onclick="filterTimeline('all')">All</button>
+                        <button class="timeline-filter" onclick="filterTimeline('easy')">Easy</button>
+                        <button class="timeline-filter" onclick="filterTimeline('medium')">Medium</button>
+                        <button class="timeline-filter" onclick="filterTimeline('hard')">Hard</button>
+                        <button class="timeline-filter" onclick="filterTimeline('insane')">Insane</button>
+                        <button class="timeline-filter" onclick="filterTimeline('extreme')">Extreme</button>
+                    </div>
+
+                    <div class="timeline" id="timeline">
+                        <!-- Timeline will be generated here -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Statistics Page -->
+            <div id="stats-page" class="page">
+                <section class="section stats-section">
+                    <h2>📊 Detailed Statistics</h2>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Goals</div>
+                            <div class="stat-value" id="statsGoals">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Demons</div>
+                            <div class="stat-value" id="statsDemons">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Easy Demons</div>
+                            <div class="stat-value" id="statsEasy">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Medium Demons</div>
+                            <div class="stat-value" id="statsMedium">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Hard Demons</div>
+                            <div class="stat-value" id="statsHard">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Insane Demons</div>
+                            <div class="stat-value" id="statsInsane">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Extreme Demons</div>
+                            <div class="stat-value" id="statsExtreme">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Practice Time</div>
+                            <div class="stat-value" id="statsTotalTime">0h</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>📈 Progression Analysis</h2>
+                    <div class="analysis-grid">
+                        <div class="analysis-card">
+                            <h3>Average Attempts</h3>
+                            <div class="analysis-value" id="avgAttempts">-</div>
+                        </div>
+                        <div class="analysis-card">
+                            <h3>Completion Rate</h3>
+                            <div class="analysis-value" id="completionRate">-</div>
+                        </div>
+                        <div class="analysis-card">
+                            <h3>Most Active Weakness</h3>
+                            <div class="analysis-value" id="mostActiveWeakness">-</div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="section">
+                    <h2>💾 Data Management</h2>
+                    <div class="button-group">
+                        <button onclick="exportData()" class="btn btn-primary">📥 Export Data</button>
+                        <button onclick="clearAllData()" class="btn btn-danger">🗑️ Clear All Data</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Tools Page -->
+            <div id="tools-page" class="page">
+                <section class="section tools-section">
+                    <div class="section-header">
+                        <h2>🛠️ Tools</h2>
+                    </div>
+
+                    <div class="tools-grid">
+                        <a href="https://pointercrate.com/demonlist/" target="_blank" rel="noopener noreferrer" class="tool-card">
+                            <h3>Pointercrate Demon List</h3>
+                            <p>Open the Pointercrate demon list website.</p>
+                        </a>
+
+                        <a href="https://www.gdcolon.com/" target="_blank" rel="noopener noreferrer" class="tool-card">
+                            <h3>GD Colon</h3>
+                            <p>Visit GD Colon’s website.</p>
+                        </a>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings-page" class="page">
+                <section class="section settings-section">
+                    <div class="section-header">
+                        <h2>⚙️ Settings</h2>
+                    </div>
+
+                    <div class="settings-card">
+                        <label for="usernameInput">Username</label>
+                        <div class="input-group">
+                            <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="30">
+                            <button onclick="saveUsername()" class="btn btn-primary">Save Username</button>
+                        </div>
+
+                        <div class="avatar-preview-card">
+                            <div class="avatar-preview" id="settingsAvatarPreview"></div>
+                            <div class="avatar-preview-label">Your profile picture</div>
+                        </div>
+
+                        <label for="pfpUpload" class="upload-label">Upload an image</label>
+                        <input type="file" id="pfpUpload" accept="image/*" onchange="handlePfpUpload(event)">
+
+                        <div class="settings-row">
+                            <label for="darkModeToggle">Dark mode</label>
+                            <label class="switch">
+                                <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode(this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <button onclick="clearPfpImage()" class="btn btn-danger btn-small" style="margin-top: 16px;">Remove Picture</button>
+                        <p id="settingsMessage" class="settings-message">Your preferences are saved automatically.</p>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <footer>
+            <p>Keep pushing! Good luck with your Geometry Dash journey! 🚀</p>
+            <p class="footer-credit">
+                By Ethan Cook —
+                <a href="https://www.youtube.com/@Ethcook" target="_blank" rel="noopener noreferrer">My Channel</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Demon Details Modal -->
+    <div id="demonModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDemonModal()">&times;</span>
+            <h2 id="modalTitle">Add Demon Details</h2>
+            
+            <div class="form-group">
+                <label>Percentage Beaten (0-100)</label>
+                <div class="percentage-input-group">
+                    <input 
+                        type="range" 
+                        id="demonPercentageRange" 
+                        min="0"
+                        max="100"
+                        value="100"
+                        class="percentage-slider"
+                    >
+                    <input 
+                        type="number" 
+                        id="demonPercentageInput" 
+                        min="0"
+                        max="100"
+                        value="100"
+                        class="percentage-number"
+                    >
+                    <span id="percentageDisplay">100%</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Attempts</label>
+                <input 
+                    type="number" 
+                    id="demonAttemptsEdit" 
+                    min="1"
+                    value="1"
+                >
+            </div>
+
+            <div class="form-group">
+                <label>Date Beaten</label>
+                <input type="date" id="demonDateEdit">
+            </div>
+
+            <div class="form-group">
+                <label>Personal Record (optional)</label>
+                <input 
+                    type="text" 
+                    id="demonPREdit" 
+                    placeholder="e.g., 87% or 2:34" 
+                    maxlength="50"
+                >
+            </div>
+
+            <div class="form-group">
+                <label>Notes/Tips (optional)</label>
+                <textarea id="demonNotesEdit" placeholder="Add your own tips, strategies, or memorable moments..." maxlength="500"></textarea>
+            </div>
+
+            <div class="modal-buttons">
+                <button onclick="confirmAddDemon()" class="btn btn-success" id="confirmBtn">Add Demon</button>
+                <button onclick="closeDemonModal()" class="btn btn-danger">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
