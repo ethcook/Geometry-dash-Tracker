@@ -8,13 +8,47 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <!-- Auth Modal -->
+    <div id="authModal" class="auth-modal">
+        <div class="auth-container">
+            <div class="auth-header">
+                <h2>🎮 Geometry Dash Tracker</h2>
+            </div>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form active">
+                <h3>Log In</h3>
+                <input type="text" id="loginUsername" placeholder="Username" class="auth-input">
+                <input type="password" id="loginPassword" placeholder="Password" class="auth-input">
+                <button onclick="handleLogin()" class="auth-btn">Log In</button>
+                <p class="auth-toggle">Don't have an account? <a href="#" onclick="toggleAuthForm(event)">Sign Up</a></p>
+                <div id="loginError" class="auth-error"></div>
+            </div>
+            
+            <!-- Signup Form -->
+            <div id="signupForm" class="auth-form">
+                <h3>Sign Up</h3>
+                <input type="text" id="signupUsername" placeholder="Username" class="auth-input">
+                <input type="password" id="signupPassword" placeholder="Password" class="auth-input">
+                <input type="password" id="signupConfirm" placeholder="Confirm Password" class="auth-input">
+                <button onclick="handleSignup()" class="auth-btn">Sign Up</button>
+                <p class="auth-toggle">Already have an account? <a href="#" onclick="toggleAuthForm(event)">Log In</a></p>
+                <div id="signupError" class="auth-error"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container" id="mainContainer" style="display: none;">
         <header>
             <h1>🎮 Geometry Dash Tracker</h1>
             <p class="subtitle">Track your goals and beaten demons</p>
+            <div class="header-actions">
+                <button class="btn btn-small btn-primary" onclick="openInfoModal()">ℹ️ How it works</button>
+            </div>
             <div class="header-user">
                 <div class="header-avatar" id="headerAvatar" aria-label="Profile picture preview"></div>
                 <div class="header-meta" id="welcomeMessage">Welcome, Player</div>
+                <button class="logout-btn" onclick="handleLogout()" title="Log out">🚪 Logout</button>
             </div>
         </header>
 
@@ -27,7 +61,9 @@
             <button class="nav-btn" onclick="switchPage('weakness')">🎯 Weakness</button>
             <button class="nav-btn" onclick="switchPage('timeline')">📅 Timeline</button>
             <button class="nav-btn" onclick="switchPage('stats')">📊 Stats</button>
+            <button class="nav-btn" onclick="switchPage('tiers')">🏆 Tiers</button>
             <button class="nav-btn" onclick="switchPage('tools')">🛠️ Tools</button>
+            <button class="nav-btn" onclick="switchPage('iconmachine')">🎨 GD Icon Machine</button>
             <button class="nav-btn" onclick="switchPage('settings')">⚙️ Settings</button>
         </nav>
 
@@ -52,6 +88,14 @@
                         <div class="quick-stat">
                             <div class="quick-stat-label">Most Attempts</div>
                             <div class="quick-stat-value" id="mostAttempts">0</div>
+                        </div>
+                        <div class="quick-stat">
+                            <div class="quick-stat-label">Quest Points</div>
+                            <div class="quick-stat-value" id="questPoints">0</div>
+                        </div>
+                        <div class="quick-stat">
+                            <div class="quick-stat-label">Coins</div>
+                            <div class="quick-stat-value" id="coinCount">0</div>
                         </div>
                     </div>
                 </section>
@@ -100,6 +144,20 @@
                         <!-- Recent activity will appear here -->
                     </div>
                 </section>
+
+                <section class="section daily-quests-section">
+                    <h2>🎁 Daily Quests</h2>
+                    <div id="dailyQuestsContainer">
+                        <div class="daily-quests-controls" style="margin-bottom:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <button id="refreshDailyQuestsBtn" onclick="refreshDailyQuests()" class="btn btn-small">🔄 Refresh Quests</button>
+                            <span id="refreshTimer" class="meta" style="font-size:0.95em; margin-left:6px;">Ready</span>
+                            <div class="meta" style="font-size:0.95em; margin-left:10px;">Quests refresh each half an hour. Complete quests to earn points.</div>
+                        </div>
+                        <div id="dailyQuestsList" class="items-list">
+                            <!-- Daily quests will be rendered here -->
+                        </div>
+                    </div>
+                </section>
             </div>
 
             <!-- Goals Page -->
@@ -137,6 +195,13 @@
                     </div>
 
                     <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="demonSearchInput" 
+                            placeholder="Search demons by name or difficulty" 
+                            maxlength="100"
+                            oninput="loadDemons()"
+                        >
                         <input 
                             type="text" 
                             id="demonInput" 
@@ -347,6 +412,19 @@
                 </section>
             </div>
 
+            <!-- Tiers Page -->
+            <div id="tiers-page" class="page">
+                <section class="section tier-section">
+                    <h2>🏆 Player Tier</h2>
+                    <div id="tierContainer">
+                        <!-- Tier display will be rendered here -->
+                    </div>
+                    <div id="tierRankDisplay" class="tier-rank-display">
+                        <!-- All tier ranks will be displayed here -->
+                    </div>
+                </section>
+            </div>
+
             <!-- Tools Page -->
             <div id="tools-page" class="page">
                 <section class="section tools-section">
@@ -364,6 +442,38 @@
                             <h3>GD Colon</h3>
                             <p>Visit GD Colon’s website.</p>
                         </a>
+                    </div>
+                </section>
+            </div>
+
+            <!-- GD Icon Machine Page -->
+            <div id="iconmachine-page" class="page">
+                <section class="section icon-machine-section">
+                    <div class="section-header">
+                        <h2>🎨 GD Icon Machine</h2>
+                        <span class="icon-machine-coins">Coins: <strong id="iconMachineCoins">0</strong></span>
+                    </div>
+                    <p class="meta">Buy icons with coins, name them, and drag them into your showcase to show them off.</p>
+
+                    <div class="icon-machine-grid">
+                        <div class="icon-shop">
+                            <div class="store-group">
+                                <h3>Available Icons</h3>
+                                <div id="availableIconList" class="icon-list"></div>
+                            </div>
+
+                            <div class="store-group">
+                                <h3>Owned Icons</h3>
+                                <div id="ownedIconList" class="icon-list"></div>
+                            </div>
+                        </div>
+
+                        <div class="icon-showcase">
+                            <h3>Your Showcase</h3>
+                            <div id="showcaseShelf" class="showcase-dropzone" ondragover="handleIconDragOver(event)" ondrop="handleIconDrop(event)">
+                                <div class="empty-message">Drag owned icons here to show them off.</div>
+                            </div>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -480,6 +590,50 @@
         </div>
     </div>
 
+    <div id="iconMachineModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeIconMachineModal()">&times;</span>
+            <div class="modal-icon-preview" id="iconMachineModalPreview">🎨</div>
+            <h2 id="iconMachineModalTitle">Icon Machine</h2>
+            <div class="modal-message" id="iconMachineModalMessage">Action description goes here.</div>
+            <div class="form-group" id="iconMachineModalRenameGroup" style="display:none;">
+                <label for="iconMachineRenameInput">Icon name</label>
+                <input type="text" id="iconMachineRenameInput" placeholder="Enter icon name" maxlength="30">
+            </div>
+            <div class="modal-buttons">
+                <button onclick="confirmIconMachineModal()" class="btn btn-primary" id="iconMachineModalConfirm">Confirm</button>
+                <button onclick="closeIconMachineModal()" class="btn btn-danger">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeInfoModal()">&times;</span>
+            <h2>How to Use Geometry Dash Tracker</h2>
+            <div class="info-section">
+                <h3>What this site is for</h3>
+                <p>This tracker helps you improve at Geometry Dash by keeping a record of your goals, demons, practice sessions, and weaknesses.</p>
+            </div>
+            <div class="info-section">
+                <h3>How to use it</h3>
+                <ul>
+                    <li>Add goals to stay focused on what you want to beat next.</li>
+                    <li>Log demons you beat with difficulty, attempts, and notes.</li>
+                    <li>Track practice sessions to see how much time you spend improving.</li>
+                    <li>Mark your weak mechanics to focus on the sections you need to practice.</li>
+                    <li>Visit the dashboard for quick stats and the timeline for progress over time.</li>
+                </ul>
+            </div>
+            <div class="info-section">
+                <h3>About the website</h3>
+                <p>This tool is designed for Geometry Dash players who want a simple, local tracker for practice, demons, and improvement goals. Your data stays in your browser.</p>
+            </div>
+            <div class="modal-buttons">
+                <button onclick="closeInfoModal()" class="btn btn-primary">Close</button>
+            </div>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>

@@ -7,6 +7,643 @@ const USERNAME_KEY = 'gdUsername';
 const DARK_MODE_KEY = 'gdDarkMode';
 const PFP_IMAGE_KEY = 'gdPfpImage';
 const DEFAULT_USERNAME = 'Player';
+const DAILY_QUESTS_KEY = 'gdDailyQuests';
+const QUEST_POINTS_KEY = 'gdQuestPoints';
+
+// Authentication keys
+const USERS_KEY = 'gdUsers';
+const CURRENT_USER_KEY = 'gdCurrentUser';
+
+let dailyQuests = [];
+
+// Simple hash function for password hashing (not production-ready, just for basic security)
+function hashPassword(password) {
+    let hash = 0;
+    for (let i = 0; i < password.length; i++) {
+        const char = password.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
+}
+
+// Get all registered users
+function getUsers() {
+    const users = localStorage.getItem(USERS_KEY);
+    return users ? JSON.parse(users) : {};
+}
+
+// Save users to storage
+function saveUsers(users) {
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+// Check if username exists
+function userExists(username) {
+    const users = getUsers();
+    return users.hasOwnProperty(username);
+}
+
+// Register a new user
+function registerUser(username, password) {
+    if (!username || !password) {
+        return { success: false, message: 'Username and password are required.' };
+    }
+    if (username.length < 3) {
+        return { success: false, message: 'Username must be at least 3 characters long.' };
+    }
+    if (password.length < 6) {
+        return { success: false, message: 'Password must be at least 6 characters long.' };
+    }
+    if (userExists(username)) {
+        return { success: false, message: 'Username already taken. Please choose another.' };
+    }
+    
+    const users = getUsers();
+    users[username] = {
+        password: hashPassword(password),
+        createdAt: new Date().toISOString()
+    };
+    saveUsers(users);
+    return { success: true, message: 'Account created successfully!' };
+}
+
+// Authenticate user
+function authenticateUser(username, password) {
+    if (!username || !password) {
+        return { success: false, message: 'Username and password are required.' };
+    }
+    
+    const users = getUsers();
+    if (!users.hasOwnProperty(username)) {
+        return { success: false, message: 'Username not found.' };
+    }
+    
+    const user = users[username];
+    const passwordHash = hashPassword(password);
+    
+    if (user.password !== passwordHash) {
+        return { success: false, message: 'Incorrect password.' };
+    }
+    
+    return { success: true, message: 'Login successful!' };
+}
+
+// Handle sign up
+function handleSignup() {
+    const username = document.getElementById('signupUsername').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const confirm = document.getElementById('signupConfirm').value;
+    const errorEl = document.getElementById('signupError');
+    
+    errorEl.textContent = '';
+    
+    if (password !== confirm) {
+        errorEl.textContent = 'Passwords do not match.';
+        return;
+    }
+    
+    const result = registerUser(username, password);
+    
+    if (!result.success) {
+        errorEl.textContent = result.message;
+        return;
+    }
+    
+    // Clear form and switch to login
+    document.getElementById('signupUsername').value = '';
+    document.getElementById('signupPassword').value = '';
+    document.getElementById('signupConfirm').value = '';
+    errorEl.textContent = '';
+    
+    // Show login form with success
+    toggleAuthForm(null, true);
+}
+
+// Handle login
+function handleLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorEl = document.getElementById('loginError');
+    
+    errorEl.textContent = '';
+    
+    const result = authenticateUser(username, password);
+    
+    if (!result.success) {
+        errorEl.textContent = result.message;
+        return;
+    }
+    
+    // Login successful
+    localStorage.setItem(CURRENT_USER_KEY, username);
+    localStorage.setItem(USERNAME_KEY, username);
+    
+    // Hide auth modal and show main app
+    document.getElementById('authModal').style.display = 'none';
+    document.getElementById('mainContainer').style.display = 'block';
+    
+    // Clear form
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
+    
+    // Update welcome message
+    updateWelcomeMessage();
+}
+
+// Handle logout
+function handleLogout() {
+    if (confirm('Are you sure you want to log out?')) {
+        localStorage.removeItem(CURRENT_USER_KEY);
+        // Don't remove USERNAME_KEY - keep it for display purposes if needed
+        location.reload();
+    }
+}
+
+// Toggle between login and signup forms
+function toggleAuthForm(event, toLogin = false) {
+    if (event) {
+        event.preventDefault();
+    }
+    
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    
+    if (toLogin || loginForm.classList.contains('active')) {
+        loginForm.classList.remove('active');
+        signupForm.classList.add('active');
+    } else {
+        loginForm.classList.add('active');
+        signupForm.classList.remove('active');
+    }
+}
+
+// Check if user is logged in and redirect to login if not
+function checkAuth() {
+    const currentUser = localStorage.getItem(CURRENT_USER_KEY);
+    const authModal = document.getElementById('authModal');
+    const mainContainer = document.getElementById('mainContainer');
+    
+    if (!currentUser) {
+        authModal.style.display = 'flex';
+        mainContainer.style.display = 'none';
+    } else {
+        authModal.style.display = 'none';
+        mainContainer.style.display = 'block';
+        updateWelcomeMessage();
+    }
+}
+
+// Update welcome message with current username
+function updateWelcomeMessage() {
+    const currentUser = localStorage.getItem(CURRENT_USER_KEY) || localStorage.getItem(USERNAME_KEY) || DEFAULT_USERNAME;
+    const welcomeEl = document.getElementById('welcomeMessage');
+    if (welcomeEl) {
+        welcomeEl.textContent = `Welcome, ${currentUser}`;
+    }
+}
+
+function getTodayStr() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getQuestPoints() {
+    return parseInt(localStorage.getItem(QUEST_POINTS_KEY) || '0', 10);
+}
+
+function saveQuestPoints(points) {
+    localStorage.setItem(QUEST_POINTS_KEY, String(points));
+}
+
+// Refresh cooldown (30 minutes) helpers
+const LAST_REFRESH_KEY = 'gdLastQuestRefresh';
+const REFRESH_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+
+function getLastRefresh() {
+    const v = parseInt(localStorage.getItem(LAST_REFRESH_KEY) || '0', 10);
+    return isNaN(v) ? 0 : v;
+}
+
+function setLastRefresh(ts) {
+    localStorage.setItem(LAST_REFRESH_KEY, String(ts));
+}
+
+function canRefreshNow() {
+    const last = getLastRefresh();
+    return Date.now() - last >= REFRESH_COOLDOWN_MS;
+}
+
+function getRemainingCooldownMs() {
+    const last = getLastRefresh();
+    const remaining = REFRESH_COOLDOWN_MS - (Date.now() - last);
+    return Math.max(0, remaining);
+}
+
+function formatMsToMMSS(ms) {
+    const total = Math.ceil(ms / 1000);
+    const min = Math.floor(total / 60);
+    const sec = total % 60;
+    return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+function updateRefreshTimerUI() {
+    const timerEl = document.getElementById('refreshTimer');
+    const btn = document.getElementById('refreshDailyQuestsBtn');
+    if (!timerEl || !btn) return;
+    if (canRefreshNow()) {
+        timerEl.textContent = 'Ready';
+        btn.disabled = false;
+        btn.classList.remove('btn-disabled');
+    } else {
+        const rem = getRemainingCooldownMs();
+        timerEl.textContent = `Refresh in ${formatMsToMMSS(rem)}`;
+        btn.disabled = true;
+        btn.classList.add('btn-disabled');
+    }
+}
+
+// Coins (visual currency) helpers
+const COINS_KEY = 'gdCoins';
+const ICON_MACHINE_KEY = 'gdIconMachineState';
+const ICON_MACHINE_STORE = [
+    { id: 'flame', emoji: '🔥', title: 'Flaming Icon', cost: 20 },
+    { id: 'ghost', emoji: '👻', title: 'Ghost Icon', cost: 15 },
+    { id: 'star', emoji: '⭐', title: 'Star Icon', cost: 25 },
+    { id: 'robot', emoji: '🤖', title: 'Robot Icon', cost: 18 },
+    { id: 'diamond', emoji: '💎', title: 'Crystal Icon', cost: 30 }
+];
+
+const ICON_KIND_MESSAGES = [
+    'Hello there! 👋',
+    'You are awesome today!',
+    'Hope you have a fun session!',
+    'Stay kind and keep going!',
+    'Nice to see you!',
+    'Friendly icon says hi!'
+];
+
+function maybeGetIconKindMessage() {
+    if (Math.random() > 0.25) return '';
+    return ICON_KIND_MESSAGES[Math.floor(Math.random() * ICON_KIND_MESSAGES.length)];
+}
+
+function getCoins() {
+    return parseInt(localStorage.getItem(COINS_KEY) || '0', 10);
+}
+
+function saveCoins(n) {
+    localStorage.setItem(COINS_KEY, String(n));
+}
+
+function addCoins(n) {
+    const next = Math.max(0, getCoins() + (parseInt(n, 10) || 0));
+    saveCoins(next);
+    updateQuestStats();
+}
+
+function updateCoinStat() {
+    const el = document.getElementById('coinCount');
+    if (el) el.textContent = String(getCoins());
+    const iconEl = document.getElementById('iconMachineCoins');
+    if (iconEl) iconEl.textContent = String(getCoins());
+}
+
+function getIconMachineState() {
+    return getStoredData(ICON_MACHINE_KEY, { purchased: [], showcase: [] });
+}
+
+function saveIconMachineState(state) {
+    localStorage.setItem(ICON_MACHINE_KEY, JSON.stringify(state));
+}
+
+function getStoreIcon(iconId) {
+    return ICON_MACHINE_STORE.find(icon => icon.id === iconId);
+}
+
+let iconMachineModalState = null;
+
+function loadIconMachine() {
+    renderIconMachine();
+}
+
+function openIconMachineModal({ title, message, iconId, mode, submitText, showRenameInput = false }) {
+    iconMachineModalState = { iconId, mode };
+    const modal = document.getElementById('iconMachineModal');
+    const titleEl = document.getElementById('iconMachineModalTitle');
+    const messageEl = document.getElementById('iconMachineModalMessage');
+    const renameGroup = document.getElementById('iconMachineModalRenameGroup');
+    const renameInput = document.getElementById('iconMachineRenameInput');
+    const confirmBtn = document.getElementById('iconMachineModalConfirm');
+
+    if (!modal || !titleEl || !messageEl || !renameGroup || !renameInput || !confirmBtn) return;
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = submitText;
+
+    const icon = getStoreIcon(iconId);
+    const preview = document.getElementById('iconMachineModalPreview');
+    if (preview) {
+        preview.textContent = icon ? icon.emoji : '🎨';
+    }
+
+    if (showRenameInput) {
+        const item = getIconMachineState().purchased.find(x => x.id === iconId);
+        renameGroup.style.display = 'block';
+        renameInput.value = item?.customName || icon?.title || '';
+        renameInput.focus();
+    } else {
+        renameGroup.style.display = 'none';
+        renameInput.value = '';
+    }
+
+    modal.classList.add('show');
+}
+
+function closeIconMachineModal() {
+    const modal = document.getElementById('iconMachineModal');
+    if (modal) modal.classList.remove('show');
+    iconMachineModalState = null;
+}
+
+function confirmIconMachineModal() {
+    if (!iconMachineModalState) {
+        closeIconMachineModal();
+        return;
+    }
+
+    const { iconId, mode } = iconMachineModalState;
+    if (mode === 'buy') {
+        completePurchaseIcon(iconId);
+    } else if (mode === 'sell') {
+        completeSellIcon(iconId);
+    } else if (mode === 'rename') {
+        completeRenameIcon(iconId);
+        return;
+    }
+
+    closeIconMachineModal();
+}
+
+function completePurchaseIcon(iconId) {
+    const state = getIconMachineState();
+    if (state.purchased.some(item => item.id === iconId)) {
+        showSettingsMessage('You already own this icon.');
+        return;
+    }
+
+    const icon = getStoreIcon(iconId);
+    if (!icon) return;
+
+    const currentCoins = getCoins();
+    if (currentCoins < icon.cost) {
+        showSettingsMessage('Not enough coins to buy this icon.');
+        return;
+    }
+
+    saveCoins(currentCoins - icon.cost);
+    state.purchased.push({
+        id: icon.id,
+        customName: icon.title,
+        purchasedAt: new Date().toISOString()
+    });
+    saveIconMachineState(state);
+    renderIconMachine();
+    showSettingsMessage(`Purchased ${icon.title}.`);
+}
+
+function completeSellIcon(iconId) {
+    const state = getIconMachineState();
+    const index = state.purchased.findIndex(item => item.id === iconId);
+    if (index === -1) return;
+
+    const icon = getStoreIcon(iconId);
+    if (!icon) return;
+
+    const sellValue = Math.floor(icon.cost / 2);
+    state.purchased.splice(index, 1);
+    state.showcase = state.showcase.filter(id => id !== iconId);
+    saveIconMachineState(state);
+    saveCoins(getCoins() + sellValue);
+    renderIconMachine();
+    showSettingsMessage(`Sold ${icon.title} for ${sellValue} coins.`);
+}
+
+function completeRenameIcon(iconId) {
+    const state = getIconMachineState();
+    const item = state.purchased.find(x => x.id === iconId);
+    if (!item) return false;
+
+    const renameInput = document.getElementById('iconMachineRenameInput');
+    if (!renameInput) return false;
+
+    const trimmed = renameInput.value.trim();
+    if (trimmed.length === 0) {
+        showSettingsMessage('Icon name cannot be empty.');
+        return false;
+    }
+
+    item.customName = trimmed;
+    saveIconMachineState(state);
+    renderIconMachine();
+    showSettingsMessage(`Renamed icon to ${trimmed}.`);
+    return true;
+}
+
+function renderIconMachine() {
+    updateCoinStat();
+    renderAvailableIcons();
+    renderOwnedIcons();
+    renderShowcaseShelf();
+}
+
+function renderAvailableIcons() {
+    const list = document.getElementById('availableIconList');
+    if (!list) return;
+
+    const state = getIconMachineState();
+    list.innerHTML = '';
+
+    ICON_MACHINE_STORE.forEach(icon => {
+        const purchasedItem = state.purchased.find(item => item.id === icon.id);
+        const purchased = Boolean(purchasedItem);
+        const displayTitle = purchasedItem ? purchasedItem.customName || icon.title : icon.title;
+        const subtitle = purchasedItem && purchasedItem.customName
+            ? `Named: ${escapeHtml(purchasedItem.customName)}`
+            : (purchased ? 'Owned' : `Cost: ${icon.cost} coins`);
+        const kindMessage = maybeGetIconKindMessage();
+        const kindMessageHtml = kindMessage ? `<div class="icon-kind-message">${escapeHtml(kindMessage)}</div>` : '';
+        const card = document.createElement('div');
+        card.className = 'icon-card' + (purchased ? ' owned' : '');
+        card.innerHTML = `
+            <div class="icon-preview">${icon.emoji}</div>
+            <div class="icon-meta">
+                <div class="icon-title">${escapeHtml(displayTitle)}</div>
+                <div class="icon-subtitle">${subtitle}</div>
+                ${kindMessageHtml}
+            </div>
+            <div class="icon-actions">
+                ${purchased ? '<span class="meta">Owned</span>' : `<button class="btn btn-primary btn-small" onclick="purchaseIcon('${icon.id}')">Buy</button>`}
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+function renderOwnedIcons() {
+    const list = document.getElementById('ownedIconList');
+    if (!list) return;
+
+    const state = getIconMachineState();
+    list.innerHTML = '';
+
+    if (state.purchased.length === 0) {
+        list.innerHTML = '<div class="empty-message">No icons owned yet. Buy one to start your showcase!</div>';
+        return;
+    }
+
+    state.purchased.forEach(item => {
+        const icon = getStoreIcon(item.id);
+        if (!icon) return;
+
+        const kindMessage = maybeGetIconKindMessage();
+        const kindMessageHtml = kindMessage ? `<div class="icon-kind-message">${escapeHtml(kindMessage)}</div>` : '';
+        const card = document.createElement('div');
+        card.className = 'icon-card owned';
+        card.setAttribute('draggable', 'true');
+        card.setAttribute('ondragstart', `handleIconDragStart(event, '${item.id}')`);
+        card.innerHTML = `
+            <div class="icon-preview">${icon.emoji}</div>
+            <div class="icon-meta">
+                <div class="icon-title">${escapeHtml(item.customName || icon.title)}</div>
+                <div class="icon-subtitle">Owned</div>
+                ${kindMessageHtml}
+            </div>
+            <div class="icon-actions">
+                <button class="btn btn-primary btn-small" onclick="renameIcon('${item.id}')">Rename</button>
+                <button class="btn btn-danger btn-small" onclick="sellIcon('${item.id}')">Sell</button>
+            </div>
+        `;
+        list.appendChild(card);
+    });
+}
+
+function renderShowcaseShelf() {
+    const shelf = document.getElementById('showcaseShelf');
+    if (!shelf) return;
+
+    const state = getIconMachineState();
+    shelf.innerHTML = '';
+
+    if (state.showcase.length === 0) {
+        shelf.innerHTML = '<div class="empty-message">Drag owned icons here to show them off.</div>';
+        return;
+    }
+
+    state.showcase.forEach(iconId => {
+        const item = state.purchased.find(x => x.id === iconId);
+        const icon = getStoreIcon(iconId);
+        if (!item || !icon) return;
+
+        const box = document.createElement('div');
+        box.className = 'showcase-icon';
+        box.setAttribute('draggable', 'true');
+        box.setAttribute('ondragstart', `handleIconDragStart(event, '${iconId}')`);
+        box.innerHTML = `
+            <div class="showcase-emoji">${icon.emoji}</div>
+            <div class="showcase-name">${escapeHtml(item.customName || icon.title)}</div>
+            <div class="showcase-meta">Drag to move or remove to hide</div>
+            <div class="showcase-actions">
+                <button class="btn btn-small btn-danger" onclick="removeFromShowcase('${iconId}')">Remove</button>
+            </div>
+        `;
+        shelf.appendChild(box);
+    });
+}
+
+function purchaseIcon(iconId) {
+    const icon = getStoreIcon(iconId);
+    if (!icon) return;
+
+    openIconMachineModal({
+        title: `Buy ${icon.title}`,
+        message: `Spend ${icon.cost} coins to buy ${icon.title}?`,
+        iconId,
+        mode: 'buy',
+        submitText: 'Buy'
+    });
+}
+
+function renameIcon(iconId) {
+    const icon = getStoreIcon(iconId);
+    if (!icon) return;
+
+    openIconMachineModal({
+        title: `Rename ${icon.title}`,
+        message: 'Enter a new name for this icon.',
+        iconId,
+        mode: 'rename',
+        submitText: 'Rename',
+        showRenameInput: true
+    });
+}
+
+function sellIcon(iconId) {
+    const icon = getStoreIcon(iconId);
+    if (!icon) return;
+
+    openIconMachineModal({
+        title: `Sell ${icon.title}`,
+        message: `Sell this icon for ${Math.floor(icon.cost / 2)} coins?`,
+        iconId,
+        mode: 'sell',
+        submitText: 'Sell'
+    });
+}
+
+function handleIconDragStart(event, iconId) {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.setData('text/plain', iconId);
+    event.dataTransfer.effectAllowed = 'move';
+}
+
+function handleIconDragOver(event) {
+    event.preventDefault();
+    const target = event.currentTarget;
+    if (target && target.classList.contains('showcase-dropzone')) {
+        target.classList.add('drag-over');
+    }
+}
+
+function handleIconDrop(event) {
+    event.preventDefault();
+    const target = event.currentTarget;
+    if (target && target.classList.contains('showcase-dropzone')) {
+        target.classList.remove('drag-over');
+    }
+
+    const iconId = event.dataTransfer.getData('text/plain');
+    if (!iconId) return;
+
+    const state = getIconMachineState();
+    if (!state.purchased.some(item => item.id === iconId)) {
+        return;
+    }
+
+    if (!state.showcase.includes(iconId)) {
+        state.showcase.push(iconId);
+        saveIconMachineState(state);
+        renderShowcaseShelf();
+    }
+}
+
+function removeFromShowcase(iconId) {
+    const state = getIconMachineState();
+    state.showcase = state.showcase.filter(id => id !== iconId);
+    saveIconMachineState(state);
+    renderShowcaseShelf();
+}
 
 // Weakness types
 const WEAKNESS_TYPES = [
@@ -97,7 +734,7 @@ function renderPfpPreview() {
 
     const avatarMarkup = imageData
         ? `<img src="${imageData}" alt="Profile picture">`
-        : '<span style="font-size: 2rem;">🧑</span>';
+        : '<span class="avatar-fallback">🧑</span>';
 
     if (headerAvatar) {
         headerAvatar.innerHTML = avatarMarkup;
@@ -156,6 +793,9 @@ function getDemonDateInputValue(dateValue) {
 
 // Initialize the app when page loads
 document.addEventListener('DOMContentLoaded', () => {
+    // Check authentication first
+    checkAuth();
+    
     updateWelcomeMessage();
     applyTheme(getDarkModeSetting());
     renderPfpPreview();
@@ -168,24 +808,38 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDemons();
     loadSessions();
     loadWeaknesses();
+    loadDailyQuests();
     updateAllStats();
+    loadIconMachine();
 
-    // Allow Enter key to add items
-    document.getElementById('goalInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addGoal();
-    });
+    // Allow Enter key to add items (guarded)
+    const goalInputEl = document.getElementById('goalInput');
+    if (goalInputEl) {
+        goalInputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addGoal();
+        });
+    }
 
-    document.getElementById('demonInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') showDemonModal();
-    });
+    const demonInputEl = document.getElementById('demonInput');
+    if (demonInputEl) {
+        demonInputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') showDemonModal();
+        });
+    }
 
-    document.getElementById('practiceNotes').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addPracticeSession();
-    });
+    const practiceNotesEl = document.getElementById('practiceNotes');
+    if (practiceNotesEl) {
+        practiceNotesEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPracticeSession();
+        });
+    }
 
-    document.getElementById('levelNameInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') addPracticeSession();
-    });
+    const levelNameInputEl = document.getElementById('levelNameInput');
+    if (levelNameInputEl) {
+        levelNameInputEl.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addPracticeSession();
+        });
+    }
 
     if (usernameInput) {
         usernameInput.addEventListener('keypress', (e) => {
@@ -194,28 +848,198 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Close modal when clicking outside
-    document.getElementById('demonModal').addEventListener('click', (e) => {
-        if (e.target.id === 'demonModal') closeDemonModal();
-    });
+    const demonModalEl = document.getElementById('demonModal');
+    if (demonModalEl) {
+        demonModalEl.addEventListener('click', (e) => {
+            if (e.target.id === 'demonModal') closeDemonModal();
+        });
+    }
+
+    const infoModalEl = document.getElementById('infoModal');
+    if (infoModalEl) {
+        infoModalEl.addEventListener('click', (e) => {
+            if (e.target.id === 'infoModal') closeInfoModal();
+        });
+    }
 
     // Initialize weakness buttons
     initWeaknessButtons();
 
-    // Percentage input sync
-    document.getElementById('demonPercentageRange').addEventListener('input', (e) => {
-        document.getElementById('demonPercentageInput').value = e.target.value;
-        document.getElementById('percentageDisplay').textContent = e.target.value + '%';
-    });
+    // Start refresh timer UI updater
+    updateRefreshTimerUI();
+    if (_refreshTimerInterval) clearInterval(_refreshTimerInterval);
+    _refreshTimerInterval = setInterval(updateRefreshTimerUI, 1000);
 
-    document.getElementById('demonPercentageInput').addEventListener('input', (e) => {
-        const value = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-        e.target.value = value;
-        document.getElementById('demonPercentageRange').value = value;
-        document.getElementById('percentageDisplay').textContent = value + '%';
-    });
+    // Percentage input sync
+    const demonRangeEl = document.getElementById('demonPercentageRange');
+    const demonNumberEl = document.getElementById('demonPercentageInput');
+    const percentageDisplayEl = document.getElementById('percentageDisplay');
+
+    if (demonRangeEl && demonNumberEl && percentageDisplayEl) {
+        demonRangeEl.addEventListener('input', (e) => {
+            demonNumberEl.value = e.target.value;
+            percentageDisplayEl.textContent = e.target.value + '%';
+        });
+
+        demonNumberEl.addEventListener('input', (e) => {
+            const value = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+            e.target.value = value;
+            demonRangeEl.value = value;
+            percentageDisplayEl.textContent = value + '%';
+        });
+    }
 });
 
 // ============= PAGE SWITCHING =============
+
+// ============= DAILY QUESTS =============
+
+function generateDailyQuests() {
+    const templates = [
+        { type: 'practice', makeText: (p) => `Practice for ${p} minutes`, param: () => (Math.random() > 0.5 ? 30 : 20), baseReward: 10 },
+        { type: 'beat', makeText: (p) => `Beat a ${p} demon`, param: () => ['Easy', 'Medium', 'Hard', 'Insane'][Math.floor(Math.random() * 4)], baseReward: 15 },
+        { type: 'sessions', makeText: (p) => `Log ${p} practice sessions`, param: () => Math.floor(Math.random() * 3) + 1, baseReward: 12 },
+        { type: 'attempts', makeText: (p) => `Attempt any level ${p} times`, param: () => Math.floor(Math.random() * 10) + 5, baseReward: 8 },
+        { type: 'weakness', makeText: (p) => `Work on ${p} mechanic`, param: () => WEAKNESS_TYPES[Math.floor(Math.random() * WEAKNESS_TYPES.length)].name, baseReward: 7 }
+    ];
+
+    const chosen = new Set();
+    const quests = [];
+    while (quests.length < 3) {
+        const idx = Math.floor(Math.random() * templates.length);
+        if (chosen.has(idx)) continue;
+        chosen.add(idx);
+        const t = templates[idx];
+        const p = t.param();
+        quests.push({
+            id: Date.now() + Math.floor(Math.random() * 9999),
+            type: t.type,
+            text: t.makeText(p),
+            param: p,
+            completed: false,
+            claimed: false,
+            reward: t.baseReward
+        });
+    }
+
+    const payload = { date: getTodayStr(), quests };
+    localStorage.setItem(DAILY_QUESTS_KEY, JSON.stringify(payload));
+    dailyQuests = quests;
+    return quests;
+}
+
+function saveDailyQuests() {
+    const payload = { date: getTodayStr(), quests: dailyQuests };
+    localStorage.setItem(DAILY_QUESTS_KEY, JSON.stringify(payload));
+}
+
+function loadDailyQuests() {
+    const raw = localStorage.getItem(DAILY_QUESTS_KEY);
+    const today = getTodayStr();
+    if (!raw) {
+        generateDailyQuests();
+    } else {
+        try {
+            const obj = JSON.parse(raw);
+            if (obj && obj.date === today && Array.isArray(obj.quests)) {
+                dailyQuests = obj.quests;
+            } else {
+                generateDailyQuests();
+            }
+        } catch (e) {
+            generateDailyQuests();
+        }
+    }
+    renderDailyQuests();
+    updateQuestStats();
+}
+
+// Hook refresh timer updater
+let _refreshTimerInterval = null;
+
+function renderDailyQuests() {
+    const list = document.getElementById('dailyQuestsList');
+    if (!list) return;
+    list.innerHTML = '';
+    if (!dailyQuests || dailyQuests.length === 0) {
+        list.innerHTML = '<div class="empty-message">No daily quests available.</div>';
+        return;
+    }
+
+    dailyQuests.forEach(q => {
+        const li = document.createElement('div');
+        li.className = 'goal-item quest-item';
+        // Complete button shows a simple square; disable if already claimed
+        const completeLabel = q.completed ? '⬛' : '⬜';
+        const completeDisabled = q.claimed ? 'disabled' : '';
+        const claimDisabled = (q.completed && !q.claimed) ? '' : 'disabled';
+        li.innerHTML = `
+            <div class="item-content">
+                <div class="item-name">${escapeHtml(q.text)}</div>
+                <div class="meta">Reward: ${q.reward} coins</div>
+            </div>
+            <div class="quest-actions">
+                <button class="quest-complete-btn" onclick="toggleCompleteQuest(${q.id})" ${completeDisabled} aria-label="Toggle complete">${completeLabel}</button>
+                <button class="btn btn-primary btn-small" onclick="claimQuest(${q.id})" ${claimDisabled}>${q.claimed ? 'Claimed' : 'Claim'}</button>
+            </div>
+        `;
+        list.appendChild(li);
+    });
+}
+
+function toggleCompleteQuest(id) {
+    const q = dailyQuests.find(x => x.id === id);
+    if (!q) return;
+    // If already claimed, do not allow toggling completion
+    if (q.claimed) {
+        showSettingsMessage('This quest has already been claimed.');
+        return;
+    }
+    q.completed = !q.completed;
+    // If user unchecks, ensure claimed is false (defensive)
+    if (!q.completed) q.claimed = false;
+    saveDailyQuests();
+    renderDailyQuests();
+}
+
+function claimQuest(id) {
+    const q = dailyQuests.find(x => x.id === id);
+    if (!q) return;
+    if (!q.completed) {
+        alert('Complete the quest before claiming the reward.');
+        return;
+    }
+    if (q.claimed) return;
+    // Grant coins as reward
+    addCoins(q.reward || 0);
+    q.claimed = true;
+    saveDailyQuests();
+    renderDailyQuests();
+    updateQuestStats();
+    showSettingsMessage(`+${q.reward} coins claimed!`);
+}
+
+function refreshDailyQuests() {
+    if (!canRefreshNow()) {
+        const rem = getRemainingCooldownMs();
+        alert(`Please wait ${formatMsToMMSS(rem)} before refreshing quests.`);
+        return;
+    }
+    if (confirm('Generate a new set of daily quests now? This will replace today\'s quests.')) {
+        generateDailyQuests();
+        setLastRefresh(Date.now());
+        renderDailyQuests();
+        updateQuestStats();
+        updateRefreshTimerUI();
+    }
+}
+
+function updateQuestStats() {
+    const el = document.getElementById('questPoints');
+    if (el) el.textContent = String(getQuestPoints());
+    updateCoinStat();
+}
+
 
 function switchPage(pageName) {
     // Hide all pages
@@ -231,7 +1055,9 @@ function switchPage(pageName) {
     // Update nav buttons
     const navBtns = document.querySelectorAll('.nav-btn');
     navBtns.forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    // Try to find the nav button that triggered this action (fallback to onclick attribute match)
+    const activeBtn = document.querySelector(`.nav-btn[onclick*="switchPage('${pageName}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
 
     // Update stats when switching to dashboard
     if (pageName === 'dashboard') {
@@ -247,6 +1073,11 @@ function switchPage(pageName) {
     // Update stats page when switching
     if (pageName === 'stats') {
         updateDetailedStats();
+    }
+
+    // Update tier display when switching to tiers page
+    if (pageName === 'tiers') {
+        renderTierDisplay();
     }
 }
 
@@ -305,7 +1136,7 @@ function loadGoals() {
             li.innerHTML = `
                 <div class="item-content">
                     <div class="item-name">🎯 ${escapeHtml(goal.text)}</div>
-                    <div style="font-size: 0.85em; color: #999;">Added: ${goal.dateAdded}</div>
+                    <div class="meta">Added: ${goal.dateAdded}</div>
                 </div>
                 <button class="btn-delete" onclick="deleteGoal(${goal.id})">Delete</button>
             `;
@@ -360,6 +1191,20 @@ function closeDemonModal() {
     document.getElementById('demonModal').classList.remove('show');
     tempDemonData = {};
     editingDemonId = null;
+}
+
+function openInfoModal() {
+    const infoModal = document.getElementById('infoModal');
+    if (infoModal) {
+        infoModal.classList.add('show');
+    }
+}
+
+function closeInfoModal() {
+    const infoModal = document.getElementById('infoModal');
+    if (infoModal) {
+        infoModal.classList.remove('show');
+    }
 }
 
 function confirmAddDemon() {
@@ -441,17 +1286,34 @@ function saveDemons(demons) {
     saveStoredData(DEMONS_KEY, demons);
 }
 
+function getDemonSearchQuery() {
+    const searchInput = document.getElementById('demonSearchInput');
+    return searchInput ? searchInput.value.trim().toLowerCase() : '';
+}
+
+function filterDemons(demons, query) {
+    if (!query) return demons;
+    return demons.filter(demon => {
+        const text = `${demon.name} ${demon.difficulty}`.toLowerCase();
+        return text.includes(query);
+    });
+}
+
 function loadDemons() {
     const demons = getDemons();
+    const query = getDemonSearchQuery();
+    const filteredDemons = filterDemons(demons, query);
     const demonsList = document.getElementById('demonsList');
 
     demonsList.innerHTML = '';
 
     if (demons.length === 0) {
         demonsList.innerHTML = '<div class="empty-message">No demons beaten yet. Go show those demons who\'s boss!</div>';
+    } else if (filteredDemons.length === 0) {
+        demonsList.innerHTML = '<div class="empty-message">No demons match your search. Try a different name or difficulty.</div>';
     } else {
         // Group demons by difficulty
-        const grouped = groupDemonsByDifficulty(demons);
+        const grouped = groupDemonsByDifficulty(filteredDemons);
         const difficultyOrder = ['Easy', 'Medium', 'Hard', 'Insane', 'Extreme'];
 
         difficultyOrder.forEach(difficulty => {
@@ -495,7 +1357,7 @@ function loadDemons() {
                     item.innerHTML = `
                         <div class="item-content">
                             <div class="item-name">👹 ${escapeHtml(demon.name)}</div>
-                            <div style="font-size: 0.85em; color: #999;">Beaten: ${formatDemonDate(demon.dateBeaten)}</div>
+                            <div class="meta">Beaten: ${formatDemonDate(demon.dateBeaten)}</div>
                             ${detailsHtml}
                         </div>
                         <div class="demon-actions">
@@ -895,7 +1757,8 @@ function filterTimeline(difficulty) {
     // Update active filter button
     const filterBtns = document.querySelectorAll('.timeline-filter');
     filterBtns.forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    const activeFilterBtn = document.querySelector(`.timeline-filter[onclick*="filterTimeline('${difficulty}')"]`);
+    if (activeFilterBtn) activeFilterBtn.classList.add('active');
     
     loadTimeline();
 }
@@ -1016,7 +1879,7 @@ function updateWeaknessStats() {
         .sort((a, b) => b[1] - a[1]);
     
     if (sortedWeaknesses.length === 0) {
-        statsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No weakness data yet. Start tracking in the Weakness Tracker!</div>';
+        statsContainer.innerHTML = '<div class="meta" style="text-align: center; padding: 20px;">No weakness data yet. Start tracking in the Weakness Tracker!</div>';
     } else {
         sortedWeaknesses.forEach(([name, count]) => {
             const type = WEAKNESS_TYPES.find(w => w.name === name);
@@ -1069,4 +1932,287 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ============= TIER SYSTEM =============
+
+const TIER_DEFINITIONS = [
+    {
+        name: 'God',
+        emoji: '👑',
+        color: '#FFD700',
+        requirements: {
+            minDemonsBeaten: 50,
+            extremeDemonsBeaten: 10,
+            insaneDemonsBeaten: 20,
+            minTotalPracticeTime: 5000,
+            description: 'You are a true GD legend! Master of all difficulties with exceptional dedication.'
+        }
+    },
+    {
+        name: 'Unreal',
+        emoji: '⭐',
+        color: '#FF6B9D',
+        requirements: {
+            minDemonsBeaten: 30,
+            extremeDemonsBeaten: 5,
+            insaneDemonsBeaten: 12,
+            minTotalPracticeTime: 2500,
+            description: 'Incredible skill and dedication! You\'ve conquered many challenging demons.'
+        }
+    },
+    {
+        name: 'Gold',
+        emoji: '✨',
+        color: '#FFD700',
+        requirements: {
+            minDemonsBeaten: 15,
+            extremeDemonsBeaten: 1,
+            insaneDemonsBeaten: 5,
+            minTotalPracticeTime: 1000,
+            description: 'Excellent progress! You\'ve beaten solid demons and shown great commitment.'
+        }
+    },
+    {
+        name: 'Silver',
+        emoji: '🥈',
+        color: '#C0C0C0',
+        requirements: {
+            minDemonsBeaten: 5,
+            extremeDemonsBeaten: 0,
+            insaneDemonsBeaten: 1,
+            minTotalPracticeTime: 300,
+            description: 'Good start! You\'re building solid skills and experience.'
+        }
+    },
+    {
+        name: 'Bronze',
+        emoji: '🥉',
+        color: '#CD7F32',
+        requirements: {
+            minDemonsBeaten: 1,
+            extremeDemonsBeaten: 0,
+            insaneDemonsBeaten: 0,
+            minTotalPracticeTime: 0,
+            description: 'Welcome to the GD journey! You\'ve started your demon-beating adventure.'
+        }
+    }
+];
+
+function calculatePlayerTier() {
+    const demons = getDemons();
+    const sessions = getSessions();
+    const grouped = groupDemonsByDifficulty(demons);
+    
+    // Calculate metrics
+    const totalDemonsBeaten = demons.length;
+    const extremeDemonsBeaten = grouped['Extreme'].length;
+    const insaneDemonsBeaten = grouped['Insane'].length;
+    
+    let totalPracticeTime = 0;
+    sessions.forEach(session => {
+        totalPracticeTime += session.minutes;
+    });
+    
+    // Find the appropriate tier
+    for (let tierDef of TIER_DEFINITIONS) {
+        const req = tierDef.requirements;
+        const meetsRequirements = 
+            totalDemonsBeaten >= req.minDemonsBeaten &&
+            extremeDemonsBeaten >= req.extremeDemonsBeaten &&
+            insaneDemonsBeaten >= req.insaneDemonsBeaten &&
+            totalPracticeTime >= req.minTotalPracticeTime;
+        
+        if (meetsRequirements) {
+            return {
+                tier: tierDef,
+                metrics: {
+                    totalDemonsBeaten,
+                    extremeDemonsBeaten,
+                    insaneDemonsBeaten,
+                    hardDemonsBeaten: grouped['Hard'].length,
+                    mediumDemonsBeaten: grouped['Medium'].length,
+                    easyDemonsBeaten: grouped['Easy'].length,
+                    totalPracticeTime
+                }
+            };
+        }
+    }
+    
+    // Return Bronze as default
+    return {
+        tier: TIER_DEFINITIONS[4], // Bronze
+        metrics: {
+            totalDemonsBeaten,
+            extremeDemonsBeaten,
+            insaneDemonsBeaten,
+            hardDemonsBeaten: grouped['Hard'].length,
+            mediumDemonsBeaten: grouped['Medium'].length,
+            easyDemonsBeaten: grouped['Easy'].length,
+            totalPracticeTime
+        }
+    };
+}
+
+function getTierProgress() {
+    const currentTierInfo = calculatePlayerTier();
+    const currentTierIndex = TIER_DEFINITIONS.findIndex(t => t.name === currentTierInfo.tier.name);
+    
+    const demons = getDemons();
+    const sessions = getSessions();
+    const grouped = groupDemonsByDifficulty(demons);
+    
+    let totalPracticeTime = 0;
+    sessions.forEach(session => {
+        totalPracticeTime += session.minutes;
+    });
+    
+    // If already at God tier, show completion
+    if (currentTierIndex === 0) {
+        return {
+            currentTier: currentTierInfo.tier,
+            nextTier: null,
+            progressPercent: 100,
+            metricsToNext: null
+        };
+    }
+    
+    // Get next tier requirements
+    const nextTierIndex = currentTierIndex - 1;
+    const nextTier = TIER_DEFINITIONS[nextTierIndex];
+    const nextReq = nextTier.requirements;
+    
+    const totalDemonsBeaten = demons.length;
+    const extremeDemonsBeaten = grouped['Extreme'].length;
+    const insaneDemonsBeaten = grouped['Insane'].length;
+    
+    // Calculate progress to next tier
+    const demonProgress = Math.min(totalDemonsBeaten / nextReq.minDemonsBeaten, 1);
+    const extremeProgress = nextReq.extremeDemonsBeaten > 0 ? 
+        Math.min(extremeDemonsBeaten / nextReq.extremeDemonsBeaten, 1) : 1;
+    const insaneProgress = nextReq.insaneDemonsBeaten > 0 ?
+        Math.min(insaneDemonsBeaten / nextReq.insaneDemonsBeaten, 1) : 1;
+    const practiceProgress = nextReq.minTotalPracticeTime > 0 ?
+        Math.min(totalPracticeTime / nextReq.minTotalPracticeTime, 1) : 1;
+    
+    const avgProgress = (demonProgress + extremeProgress + insaneProgress + practiceProgress) / 4;
+    
+    return {
+        currentTier: currentTierInfo.tier,
+        nextTier: nextTier,
+        progressPercent: Math.round(avgProgress * 100),
+        metricsToNext: {
+            demonsNeeded: Math.max(0, nextReq.minDemonsBeaten - totalDemonsBeaten),
+            extremeNeeded: Math.max(0, nextReq.extremeDemonsBeaten - extremeDemonsBeaten),
+            insaneNeeded: Math.max(0, nextReq.insaneDemonsBeaten - insaneDemonsBeaten),
+            practiceNeeded: Math.max(0, nextReq.minTotalPracticeTime - totalPracticeTime)
+        }
+    };
+}
+
+function renderTierDisplay() {
+    const tierContainer = document.getElementById('tierContainer');
+    if (!tierContainer) return;
+    
+    const tierInfo = calculatePlayerTier();
+    const progressInfo = getTierProgress();
+    
+    const tier = tierInfo.tier;
+    const metrics = tierInfo.metrics;
+    const progress = progressInfo.progressPercent;
+    const nextTier = progressInfo.nextTier;
+    const metricsToNext = progressInfo.metricsToNext;
+    
+    let nextTierHTML = '';
+    if (nextTier) {
+        nextTierHTML = `
+            <div class="tier-next">
+                <div class="next-tier-label">Progress to ${nextTier.name} ${nextTier.emoji}</div>
+                <div class="tier-progress-bar">
+                    <div class="tier-progress-fill" style="width: ${progress}%"></div>
+                </div>
+                <div class="tier-progress-text">${progress}% Complete</div>
+                <div class="tier-metrics-needed">
+                    <div class="metric-needed">Demons: ${metrics.totalDemonsBeaten}/${metrics.totalDemonsBeaten + metricsToNext.demonsNeeded}</div>
+                    <div class="metric-needed">Extreme: ${metrics.extremeDemonsBeaten}/${metrics.extremeDemonsBeaten + metricsToNext.extremeNeeded}</div>
+                    <div class="metric-needed">Insane: ${metrics.insaneDemonsBeaten}/${metrics.insaneDemonsBeaten + metricsToNext.insaneNeeded}</div>
+                    <div class="metric-needed">Practice: ${metrics.totalPracticeTime}/${metrics.totalPracticeTime + metricsToNext.practiceNeeded} min</div>
+                </div>
+            </div>
+        `;
+    }
+    
+    tierContainer.innerHTML = `
+        <div class="tier-display" style="border-color: ${tier.color}">
+            <div class="tier-header">
+                <div class="tier-icon">${tier.emoji}</div>
+                <div class="tier-name" style="color: ${tier.color}">${tier.name}</div>
+            </div>
+            <div class="tier-description">${tier.description}</div>
+            <div class="tier-stats">
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Demons Beaten:</span>
+                    <span class="tier-stat-value">${metrics.totalDemonsBeaten}</span>
+                </div>
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Extreme:</span>
+                    <span class="tier-stat-value">${metrics.extremeDemonsBeaten}</span>
+                </div>
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Insane:</span>
+                    <span class="tier-stat-value">${metrics.insaneDemonsBeaten}</span>
+                </div>
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Hard:</span>
+                    <span class="tier-stat-value">${metrics.hardDemonsBeaten}</span>
+                </div>
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Medium:</span>
+                    <span class="tier-stat-value">${metrics.mediumDemonsBeaten}</span>
+                </div>
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Easy:</span>
+                    <span class="tier-stat-value">${metrics.easyDemonsBeaten}</span>
+                </div>
+                <div class="tier-stat">
+                    <span class="tier-stat-label">Practice Time:</span>
+                    <span class="tier-stat-value">${metrics.totalPracticeTime} min</span>
+                </div>
+            </div>
+            ${nextTierHTML}
+        </div>
+    `;
+    
+    renderTierRankDisplay();
+}
+
+function renderTierRankDisplay() {
+    const rankContainer = document.getElementById('tierRankDisplay');
+    if (!rankContainer) return;
+    
+    const tierInfo = calculatePlayerTier();
+    const currentTierName = tierInfo.tier.name;
+    
+    let rankHTML = '<div class="tier-rank-container">';
+    rankHTML += '<div class="tier-rank-label">Tier Progression:</div>';
+    rankHTML += '<div class="tier-rank-progression">';
+    
+    // Reverse the tier order so God is on the right
+    const reversedTiers = [...TIER_DEFINITIONS].reverse();
+    
+    reversedTiers.forEach((tier, index) => {
+        const isCurrentTier = tier.name === currentTierName;
+        const tierPosition = reversedTiers.length - index;
+        
+        rankHTML += `
+            <div class="tier-rank-item ${isCurrentTier ? 'active' : ''}" title="${tier.name}: ${tier.description}">
+                <div class="rank-icon">${tier.emoji}</div>
+                <div class="rank-name">${tier.name}</div>
+                ${isCurrentTier ? '<div class="rank-badge">✓ YOU ARE HERE</div>' : ''}
+            </div>
+        `;
+    });
+    
+    rankHTML += '</div></div>';
+    rankContainer.innerHTML = rankHTML;
 }
