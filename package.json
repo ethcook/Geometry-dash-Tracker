@@ -1,0 +1,12 @@
+{
+  "name": "geometry-dash-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js"
+  },
+  "engines": {
+    "node": ">=20.6"
+  }
+}

@@ -9,199 +9,14 @@ const PFP_IMAGE_KEY = 'gdPfpImage';
 const DEFAULT_USERNAME = 'Player';
 const DAILY_QUESTS_KEY = 'gdDailyQuests';
 const QUEST_POINTS_KEY = 'gdQuestPoints';
-
-// Authentication keys
-const USERS_KEY = 'gdUsers';
-const CURRENT_USER_KEY = 'gdCurrentUser';
+const PLAYER_ID_KEY = 'gdPlayerId';
+const CHAT_HISTORY_KEY = 'gdChatHistory';
+const CHAT_MAX_MESSAGES = 20;
+const CHAT_MAX_MESSAGE_LENGTH = 4000;
 
 let dailyQuests = [];
-
-// Simple hash function for password hashing (not production-ready, just for basic security)
-function hashPassword(password) {
-    let hash = 0;
-    for (let i = 0; i < password.length; i++) {
-        const char = password.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
-    }
-    return Math.abs(hash).toString(36);
-}
-
-// Get all registered users
-function getUsers() {
-    const users = localStorage.getItem(USERS_KEY);
-    return users ? JSON.parse(users) : {};
-}
-
-// Save users to storage
-function saveUsers(users) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-// Check if username exists
-function userExists(username) {
-    const users = getUsers();
-    return users.hasOwnProperty(username);
-}
-
-// Register a new user
-function registerUser(username, password) {
-    if (!username || !password) {
-        return { success: false, message: 'Username and password are required.' };
-    }
-    if (username.length < 3) {
-        return { success: false, message: 'Username must be at least 3 characters long.' };
-    }
-    if (password.length < 6) {
-        return { success: false, message: 'Password must be at least 6 characters long.' };
-    }
-    if (userExists(username)) {
-        return { success: false, message: 'Username already taken. Please choose another.' };
-    }
-    
-    const users = getUsers();
-    users[username] = {
-        password: hashPassword(password),
-        createdAt: new Date().toISOString()
-    };
-    saveUsers(users);
-    return { success: true, message: 'Account created successfully!' };
-}
-
-// Authenticate user
-function authenticateUser(username, password) {
-    if (!username || !password) {
-        return { success: false, message: 'Username and password are required.' };
-    }
-    
-    const users = getUsers();
-    if (!users.hasOwnProperty(username)) {
-        return { success: false, message: 'Username not found.' };
-    }
-    
-    const user = users[username];
-    const passwordHash = hashPassword(password);
-    
-    if (user.password !== passwordHash) {
-        return { success: false, message: 'Incorrect password.' };
-    }
-    
-    return { success: true, message: 'Login successful!' };
-}
-
-// Handle sign up
-function handleSignup() {
-    const username = document.getElementById('signupUsername').value.trim();
-    const password = document.getElementById('signupPassword').value;
-    const confirm = document.getElementById('signupConfirm').value;
-    const errorEl = document.getElementById('signupError');
-    
-    errorEl.textContent = '';
-    
-    if (password !== confirm) {
-        errorEl.textContent = 'Passwords do not match.';
-        return;
-    }
-    
-    const result = registerUser(username, password);
-    
-    if (!result.success) {
-        errorEl.textContent = result.message;
-        return;
-    }
-    
-    // Clear form and switch to login
-    document.getElementById('signupUsername').value = '';
-    document.getElementById('signupPassword').value = '';
-    document.getElementById('signupConfirm').value = '';
-    errorEl.textContent = '';
-    
-    // Show login form with success
-    toggleAuthForm(null, true);
-}
-
-// Handle login
-function handleLogin() {
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value;
-    const errorEl = document.getElementById('loginError');
-    
-    errorEl.textContent = '';
-    
-    const result = authenticateUser(username, password);
-    
-    if (!result.success) {
-        errorEl.textContent = result.message;
-        return;
-    }
-    
-    // Login successful
-    localStorage.setItem(CURRENT_USER_KEY, username);
-    localStorage.setItem(USERNAME_KEY, username);
-    
-    // Hide auth modal and show main app
-    document.getElementById('authModal').style.display = 'none';
-    document.getElementById('mainContainer').style.display = 'block';
-    
-    // Clear form
-    document.getElementById('loginUsername').value = '';
-    document.getElementById('loginPassword').value = '';
-    
-    // Update welcome message
-    updateWelcomeMessage();
-}
-
-// Handle logout
-function handleLogout() {
-    if (confirm('Are you sure you want to log out?')) {
-        localStorage.removeItem(CURRENT_USER_KEY);
-        // Don't remove USERNAME_KEY - keep it for display purposes if needed
-        location.reload();
-    }
-}
-
-// Toggle between login and signup forms
-function toggleAuthForm(event, toLogin = false) {
-    if (event) {
-        event.preventDefault();
-    }
-    
-    const loginForm = document.getElementById('loginForm');
-    const signupForm = document.getElementById('signupForm');
-    
-    if (toLogin || loginForm.classList.contains('active')) {
-        loginForm.classList.remove('active');
-        signupForm.classList.add('active');
-    } else {
-        loginForm.classList.add('active');
-        signupForm.classList.remove('active');
-    }
-}
-
-// Check if user is logged in and redirect to login if not
-function checkAuth() {
-    const currentUser = localStorage.getItem(CURRENT_USER_KEY);
-    const authModal = document.getElementById('authModal');
-    const mainContainer = document.getElementById('mainContainer');
-    
-    if (!currentUser) {
-        authModal.style.display = 'flex';
-        mainContainer.style.display = 'none';
-    } else {
-        authModal.style.display = 'none';
-        mainContainer.style.display = 'block';
-        updateWelcomeMessage();
-    }
-}
-
-// Update welcome message with current username
-function updateWelcomeMessage() {
-    const currentUser = localStorage.getItem(CURRENT_USER_KEY) || localStorage.getItem(USERNAME_KEY) || DEFAULT_USERNAME;
-    const welcomeEl = document.getElementById('welcomeMessage');
-    if (welcomeEl) {
-        welcomeEl.textContent = `Welcome, ${currentUser}`;
-    }
-}
+let chatMessages = [];
+let chatRequestPending = false;
 
 function getTodayStr() {
     const d = new Date();
@@ -698,12 +513,348 @@ function getUsername() {
     return localStorage.getItem(USERNAME_KEY) || DEFAULT_USERNAME;
 }
 
-function saveUsername() {
+function loadChatHistory() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]');
+        chatMessages = Array.isArray(saved)
+            ? saved.filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+                .slice(-CHAT_MAX_MESSAGES)
+            : [];
+    } catch (error) {
+        chatMessages = [];
+    }
+    renderChatMessages();
+}
+
+function saveChatHistory() {
+    chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
+    try {
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatMessages));
+    } catch (error) {
+        showChatError('Chat history could not be saved in this browser.');
+    }
+}
+
+function showChatError(message = '') {
+    const errorEl = document.getElementById('chatError');
+    if (errorEl) errorEl.textContent = message;
+}
+
+function appendInlineMarkdown(parent, text) {
+    const tokenPattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\[[^\]\n]+\]\([^\s)]+\)|\*[^*\n]+\*|_[^_\n]+_)/g;
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(tokenPattern)) {
+        if (match.index > lastIndex) parent.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        const token = match[0];
+
+        if (token.startsWith('`')) {
+            const code = document.createElement('code');
+            code.textContent = token.slice(1, -1);
+            parent.appendChild(code);
+        } else if (token.startsWith('**') || token.startsWith('__')) {
+            const strong = document.createElement('strong');
+            strong.textContent = token.slice(2, -2);
+            parent.appendChild(strong);
+        } else if (token.startsWith('[')) {
+            const parts = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+            let safeUrl = null;
+            try {
+                const parsedUrl = new URL(parts[2], window.location.href);
+                if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') safeUrl = parsedUrl.href;
+            } catch (error) {
+                // Invalid links are displayed as plain text.
+            }
+            if (safeUrl) {
+                const link = document.createElement('a');
+                link.textContent = parts[1];
+                link.href = safeUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                parent.appendChild(link);
+            } else {
+                parent.appendChild(document.createTextNode(parts[1]));
+            }
+        } else {
+            const emphasis = document.createElement('em');
+            emphasis.textContent = token.slice(1, -1);
+            parent.appendChild(emphasis);
+        }
+        lastIndex = match.index + token.length;
+    }
+
+    if (lastIndex < text.length) parent.appendChild(document.createTextNode(text.slice(lastIndex)));
+}
+
+function renderMarkdown(container, markdown) {
+    const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
+    let index = 0;
+
+    const startsBlock = line => /^\s*(```|#{1,6}\s|>|[-*+]\s|\d+[.)]\s|---+\s*$)/.test(line);
+    while (index < lines.length) {
+        const line = lines[index];
+        if (!line.trim()) {
+            index += 1;
+            continue;
+        }
+
+        const fence = line.match(/^\s*```([\w+-]*)\s*$/);
+        if (fence) {
+            const codeLines = [];
+            index += 1;
+            while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) {
+                codeLines.push(lines[index]);
+                index += 1;
+            }
+            if (index < lines.length) index += 1;
+            const pre = document.createElement('pre');
+            const code = document.createElement('code');
+            if (fence[1]) code.dataset.language = fence[1];
+            code.textContent = codeLines.join('\n');
+            pre.appendChild(code);
+            container.appendChild(pre);
+            continue;
+        }
+
+        const heading = line.match(/^\s*(#{1,6})\s+(.+)$/);
+        if (heading) {
+            const element = document.createElement(`h${heading[1].length}`);
+            appendInlineMarkdown(element, heading[2].replace(/\s+#+\s*$/, ''));
+            container.appendChild(element);
+            index += 1;
+            continue;
+        }
+
+        if (/^\s*---+\s*$/.test(line)) {
+            container.appendChild(document.createElement('hr'));
+            index += 1;
+            continue;
+        }
+
+        if (/^\s*>/.test(line)) {
+            const quote = document.createElement('blockquote');
+            const quoteLines = [];
+            while (index < lines.length && /^\s*>/.test(lines[index])) {
+                quoteLines.push(lines[index].replace(/^\s*>\s?/, ''));
+                index += 1;
+            }
+            appendInlineMarkdown(quote, quoteLines.join('\n'));
+            container.appendChild(quote);
+            continue;
+        }
+
+        const listMatch = line.match(/^\s*([-*+]|\d+[.)])\s+(.+)$/);
+        if (listMatch) {
+            const ordered = /^\d/.test(listMatch[1]);
+            const list = document.createElement(ordered ? 'ol' : 'ul');
+            while (index < lines.length) {
+                const itemMatch = lines[index].match(/^\s*([-*+]|\d+[.)])\s+(.+)$/);
+                if (!itemMatch || /^\d/.test(itemMatch[1]) !== ordered) break;
+                const item = document.createElement('li');
+                appendInlineMarkdown(item, itemMatch[2]);
+                list.appendChild(item);
+                index += 1;
+            }
+            container.appendChild(list);
+            continue;
+        }
+
+        const paragraphLines = [line.trim()];
+        index += 1;
+        while (index < lines.length && lines[index].trim() && !startsBlock(lines[index])) {
+            paragraphLines.push(lines[index].trim());
+            index += 1;
+        }
+        const paragraph = document.createElement('p');
+        appendInlineMarkdown(paragraph, paragraphLines.join(' '));
+        container.appendChild(paragraph);
+    }
+}
+
+function renderChatMessages() {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    container.replaceChildren();
+
+    if (chatMessages.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'chat-empty';
+        empty.textContent = 'Start a conversation by asking a question below.';
+        container.appendChild(empty);
+    } else {
+        chatMessages.forEach(message => {
+            const row = document.createElement('div');
+            row.className = `chat-message ${message.role}`;
+
+            const label = document.createElement('div');
+            label.className = 'chat-message-label';
+            label.textContent = message.role === 'user' ? 'You' : 'The GD Chatbot';
+
+            const content = document.createElement('div');
+            content.className = 'chat-message-content';
+            if (message.role === 'assistant') renderMarkdown(content, message.content);
+            else content.textContent = message.content;
+
+            row.append(label, content);
+            container.appendChild(row);
+        });
+    }
+
+    if (chatRequestPending) {
+        const loading = document.createElement('div');
+        loading.className = 'chat-message assistant chat-loading';
+        loading.textContent = 'Assistant is thinking…';
+        container.appendChild(loading);
+    }
+    container.scrollTop = container.scrollHeight;
+}
+
+function setChatPending(pending) {
+    chatRequestPending = pending;
+    const input = document.getElementById('chatInput');
+    const sendButton = document.getElementById('sendChatBtn');
+    const clearButton = document.getElementById('clearChatBtn');
+    if (input) input.disabled = pending;
+    if (sendButton) {
+        sendButton.disabled = pending;
+        sendButton.textContent = pending ? 'Sending…' : 'Send';
+    }
+    if (clearButton) clearButton.disabled = pending;
+    renderChatMessages();
+}
+
+async function sendChatMessage() {
+    if (chatRequestPending) return;
+    const input = document.getElementById('chatInput');
+    const content = (input?.value || '').trim();
+    if (!content) {
+        showChatError('Enter a message first.');
+        input?.focus();
+        return;
+    }
+    if (content.length > CHAT_MAX_MESSAGE_LENGTH) {
+        showChatError(`Messages can contain up to ${CHAT_MAX_MESSAGE_LENGTH} characters.`);
+        return;
+    }
+
+    showChatError();
+    chatMessages.push({ role: 'user', content });
+    chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
+    saveChatHistory();
+    if (input) input.value = '';
+    setChatPending(true);
+
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: chatMessages })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'The chatbot could not respond.');
+        if (typeof result.reply !== 'string' || !result.reply.trim()) throw new Error('The chatbot returned an empty response.');
+
+        chatMessages.push({ role: 'assistant', content: result.reply.trim() });
+        saveChatHistory();
+    } catch (error) {
+        chatMessages.pop();
+        saveChatHistory();
+        if (input) input.value = content;
+        showChatError(error.message || 'The chatbot could not respond. Please try again.');
+    } finally {
+        setChatPending(false);
+        input?.focus();
+    }
+}
+
+function clearChat() {
+    if (chatRequestPending || chatMessages.length === 0) return;
+    if (!confirm('Clear the entire chat history?')) return;
+    chatMessages = [];
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+    showChatError();
+    renderChatMessages();
+    document.getElementById('chatInput')?.focus();
+}
+
+function getPlayerId() {
+    let playerId = localStorage.getItem(PLAYER_ID_KEY);
+    if (!playerId) {
+        playerId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        localStorage.setItem(PLAYER_ID_KEY, playerId);
+    }
+    return playerId;
+}
+
+async function syncProfileToServer() {
+    try {
+        const response = await fetch('/api/profiles', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                playerId: getPlayerId(),
+                username: getUsername(),
+                pfpImage: getPfpImage()
+            })
+        });
+        if (!response.ok) throw new Error('Profile save failed.');
+        return true;
+    } catch (error) {
+        return false;
+    }
+}
+
+async function loadProfileFromServer() {
+    try {
+        const response = await fetch(`/api/profiles/${encodeURIComponent(getPlayerId())}`);
+        if (response.status === 404) {
+            await syncProfileToServer();
+            return;
+        }
+        if (!response.ok) return;
+        const profile = await response.json();
+        if (profile.username) localStorage.setItem(USERNAME_KEY, profile.username);
+        if (profile.pfpImage) localStorage.setItem(PFP_IMAGE_KEY, profile.pfpImage);
+        else localStorage.removeItem(PFP_IMAGE_KEY);
+
+        const input = document.getElementById('usernameInput');
+        if (input) input.value = getUsername();
+        updateWelcomeMessage();
+        renderPfpPreview();
+    } catch (error) {
+        // The local copy remains usable when the server is unavailable.
+    }
+}
+
+async function saveUsername() {
     const input = document.getElementById('usernameInput');
     const username = (input ? input.value : '').trim() || DEFAULT_USERNAME;
-    localStorage.setItem(USERNAME_KEY, username);
+    try {
+        localStorage.setItem(USERNAME_KEY, username);
+    } catch (error) {
+        showSettingsMessage('Could not save your username. Check that browser storage is enabled.');
+        return;
+    }
+    if (input) input.value = username;
     updateWelcomeMessage();
-    showSettingsMessage(`Username saved as ${username}.`);
+    const savedOnline = await syncProfileToServer();
+    showSettingsMessage(savedOnline
+        ? `Username saved as ${username}.`
+        : `Username saved on this device. Start the live server to save it for everyone.`);
+}
+
+function persistUsernameDraft(event) {
+    const username = event.target.value.trim();
+    try {
+        if (username) {
+            localStorage.setItem(USERNAME_KEY, username);
+        } else {
+            localStorage.removeItem(USERNAME_KEY);
+        }
+        updateWelcomeMessage();
+    } catch (error) {
+        showSettingsMessage('Could not save your username. Check that browser storage is enabled.');
+    }
 }
 
 function showSettingsMessage(message) {
@@ -745,7 +896,14 @@ function getPfpImage() {
 }
 
 function savePfpImage(dataUrl) {
-    localStorage.setItem(PFP_IMAGE_KEY, dataUrl);
+    try {
+        localStorage.setItem(PFP_IMAGE_KEY, dataUrl);
+        syncProfileToServer();
+        return true;
+    } catch (error) {
+        showSettingsMessage('That picture could not be saved. Try a smaller image.');
+        return false;
+    }
 }
 
 function renderPfpPreview() {
@@ -770,18 +928,44 @@ function handlePfpUpload(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
+    if (!file.type.startsWith('image/')) {
+        showSettingsMessage('Please choose an image file.');
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = function (e) {
-        const dataUrl = e.target.result;
-        savePfpImage(dataUrl);
-        renderPfpPreview();
-        showSettingsMessage('Profile picture uploaded.');
+        const image = new Image();
+        image.onload = function () {
+            const maxSize = 512;
+            const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+
+            const context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+            if (savePfpImage(dataUrl)) {
+                renderPfpPreview();
+                showSettingsMessage('Profile picture saved.');
+            }
+        };
+        image.onerror = function () {
+            showSettingsMessage('That image could not be loaded.');
+        };
+        image.src = e.target.result;
+    };
+    reader.onerror = function () {
+        showSettingsMessage('That image could not be read.');
     };
     reader.readAsDataURL(file);
 }
 
 function clearPfpImage() {
     localStorage.removeItem(PFP_IMAGE_KEY);
+    syncProfileToServer();
     renderPfpPreview();
     showSettingsMessage('Profile picture removed.');
 }
@@ -814,9 +998,6 @@ function getDemonDateInputValue(dateValue) {
 
 // Initialize the app when page loads
 document.addEventListener('DOMContentLoaded', () => {
-    // Check authentication first
-    checkAuth();
-    
     updateWelcomeMessage();
     applyTheme(getDarkModeSetting());
     renderPfpPreview();
@@ -824,6 +1005,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (usernameInput) {
         usernameInput.value = getUsername();
     }
+    loadProfileFromServer();
 
     loadGoals();
     loadDemons();
@@ -832,6 +1014,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDailyQuests();
     updateAllStats();
     loadIconMachine();
+    loadChatHistory();
 
     // Allow Enter key to add items (guarded)
     const goalInputEl = document.getElementById('goalInput');
@@ -863,8 +1046,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (usernameInput) {
+        usernameInput.addEventListener('input', persistUsernameDraft);
         usernameInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') saveUsername();
+        });
+        usernameInput.addEventListener('change', saveUsername);
+    }
+
+    const chatInputEl = document.getElementById('chatInput');
+    if (chatInputEl) {
+        chatInputEl.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendChatMessage();
+            }
         });
     }
 

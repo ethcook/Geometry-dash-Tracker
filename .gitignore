@@ -1,0 +1,6 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+data/player-profiles.json
+data/player-profiles.json.tmp

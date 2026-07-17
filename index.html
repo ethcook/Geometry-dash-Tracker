@@ -8,37 +8,7 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Auth Modal -->
-    <div id="authModal" class="auth-modal">
-        <div class="auth-container">
-            <div class="auth-header">
-                <h2>🎮 Geometry Dash Tracker</h2>
-            </div>
-            
-            <!-- Login Form -->
-            <div id="loginForm" class="auth-form active">
-                <h3>Log In</h3>
-                <input type="text" id="loginUsername" placeholder="Username" class="auth-input">
-                <input type="password" id="loginPassword" placeholder="Password" class="auth-input">
-                <button onclick="handleLogin()" class="auth-btn">Log In</button>
-                <p class="auth-toggle">Don't have an account? <a href="#" onclick="toggleAuthForm(event)">Sign Up</a></p>
-                <div id="loginError" class="auth-error"></div>
-            </div>
-            
-            <!-- Signup Form -->
-            <div id="signupForm" class="auth-form">
-                <h3>Sign Up</h3>
-                <input type="text" id="signupUsername" placeholder="Username" class="auth-input">
-                <input type="password" id="signupPassword" placeholder="Password" class="auth-input">
-                <input type="password" id="signupConfirm" placeholder="Confirm Password" class="auth-input">
-                <button onclick="handleSignup()" class="auth-btn">Sign Up</button>
-                <p class="auth-toggle">Already have an account? <a href="#" onclick="toggleAuthForm(event)">Log In</a></p>
-                <div id="signupError" class="auth-error"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="container" id="mainContainer" style="display: none;">
+    <div class="container" id="mainContainer">
         <header>
             <h1>🎮 Geometry Dash Tracker</h1>
             <p class="subtitle">Track your goals and beaten demons</p>
@@ -48,7 +18,6 @@
             <div class="header-user">
                 <div class="header-avatar" id="headerAvatar" aria-label="Profile picture preview"></div>
                 <div class="header-meta" id="welcomeMessage">Welcome, Player</div>
-                <button class="logout-btn" onclick="handleLogout()" title="Log out">🚪 Logout</button>
             </div>
         </header>
 
@@ -66,6 +35,7 @@
             <button class="nav-btn" onclick="switchPage('tiers')" title="Tiers">🏆 <span>Tiers</span></button>
             <button class="nav-btn" onclick="switchPage('tools')" title="Tools">🛠️ <span>Tools</span></button>
             <button class="nav-btn" onclick="switchPage('iconmachine')" title="GD Icon Machine">🎨 <span>GD Icon Machine</span></button>
+            <button class="nav-btn" onclick="switchPage('chatbot')" title="The GD Chatbot">🤖 <span>The GD Chatbot</span></button>
             <button class="nav-btn" onclick="switchPage('settings')" title="Settings">⚙️ <span>Settings</span></button>
             </nav>
         </aside>
@@ -162,6 +132,7 @@
                         </div>
                     </div>
                 </section>
+
             </div>
 
             <!-- Goals Page -->
@@ -480,6 +451,29 @@
                             </div>
                         </div>
                     </div>
+                </section>
+            </div>
+
+            <!-- Chatbot Page -->
+            <div id="chatbot-page" class="page">
+                <section class="section chatbot-section" aria-labelledby="chatbotTitle">
+                    <div class="section-header chatbot-header">
+                        <div>
+                            <h2 id="chatbotTitle">🤖 The GD Chatbot</h2>
+                            <p class="meta">Ask a general question. Responses use Gemini 3.1 Flash Lite through OpenRouter.</p>
+                        </div>
+                        <button id="clearChatBtn" type="button" class="btn btn-danger btn-small" onclick="clearChat()">Clear Chat</button>
+                    </div>
+                    <div id="chatMessages" class="chat-messages" role="log" aria-live="polite" aria-relevant="additions">
+                        <div class="chat-empty" id="chatEmpty">Start a conversation by asking a question below.</div>
+                    </div>
+                    <p id="chatError" class="chat-error" role="alert"></p>
+                    <div class="chat-composer">
+                        <label class="sr-only" for="chatInput">Message the chatbot</label>
+                        <textarea id="chatInput" rows="3" maxlength="4000" placeholder="Ask me anything..."></textarea>
+                        <button id="sendChatBtn" type="button" class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+                    </div>
+                    <p class="meta chat-hint">Press Enter to send or Shift+Enter for a new line.</p>
                 </section>
             </div>
 
