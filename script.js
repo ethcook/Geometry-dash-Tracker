@@ -216,6 +216,11 @@ function saveQuestPoints(points) {
     localStorage.setItem(QUEST_POINTS_KEY, String(points));
 }
 
+function showDailyQuestMessage(message) {
+    const messageEl = document.getElementById('dailyQuestMessage');
+    if (messageEl) messageEl.textContent = message;
+}
+
 // Refresh cooldown (30 minutes) helpers
 const LAST_REFRESH_KEY = 'gdLastQuestRefresh';
 const REFRESH_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
@@ -309,6 +314,11 @@ function updateCoinStat() {
     if (iconEl) iconEl.textContent = String(getCoins());
 }
 
+function showIconMachineMessage(message) {
+    const messageEl = document.getElementById('iconMachineMessage');
+    if (messageEl) messageEl.textContent = message;
+}
+
 function getIconMachineState() {
     return getStoredData(ICON_MACHINE_KEY, { purchased: [], showcase: [] });
 }
@@ -341,6 +351,7 @@ function openIconMachineModal({ title, message, iconId, mode, submitText, showRe
     titleEl.textContent = title;
     messageEl.textContent = message;
     confirmBtn.textContent = submitText;
+    confirmBtn.disabled = false;
 
     const icon = getStoreIcon(iconId);
     const preview = document.getElementById('iconMachineModalPreview');
@@ -379,7 +390,7 @@ function confirmIconMachineModal() {
     } else if (mode === 'sell') {
         completeSellIcon(iconId);
     } else if (mode === 'rename') {
-        completeRenameIcon(iconId);
+        if (completeRenameIcon(iconId)) closeIconMachineModal();
         return;
     }
 
@@ -389,7 +400,7 @@ function confirmIconMachineModal() {
 function completePurchaseIcon(iconId) {
     const state = getIconMachineState();
     if (state.purchased.some(item => item.id === iconId)) {
-        showSettingsMessage('You already own this icon.');
+        showIconMachineMessage('You already own this icon.');
         return;
     }
 
@@ -398,7 +409,8 @@ function completePurchaseIcon(iconId) {
 
     const currentCoins = getCoins();
     if (currentCoins < icon.cost) {
-        showSettingsMessage('Not enough coins to buy this icon.');
+        const coinsNeeded = icon.cost - currentCoins;
+        showIconMachineMessage(`Not enough coins. You have ${currentCoins}, but ${icon.title} costs ${icon.cost}. You need ${coinsNeeded} more.`);
         return;
     }
 
@@ -410,7 +422,7 @@ function completePurchaseIcon(iconId) {
     });
     saveIconMachineState(state);
     renderIconMachine();
-    showSettingsMessage(`Purchased ${icon.title}.`);
+    showIconMachineMessage(`You had enough coins! Purchased ${icon.title} for ${icon.cost} coins. You have ${getCoins()} coins left.`);
 }
 
 function completeSellIcon(iconId) {
@@ -427,7 +439,7 @@ function completeSellIcon(iconId) {
     saveIconMachineState(state);
     saveCoins(getCoins() + sellValue);
     renderIconMachine();
-    showSettingsMessage(`Sold ${icon.title} for ${sellValue} coins.`);
+    showIconMachineMessage(`Sold ${icon.title} for ${sellValue} coins. You now have ${getCoins()} coins.`);
 }
 
 function completeRenameIcon(iconId) {
@@ -440,14 +452,14 @@ function completeRenameIcon(iconId) {
 
     const trimmed = renameInput.value.trim();
     if (trimmed.length === 0) {
-        showSettingsMessage('Icon name cannot be empty.');
+        showIconMachineMessage('Icon name cannot be empty.');
         return false;
     }
 
     item.customName = trimmed;
     saveIconMachineState(state);
     renderIconMachine();
-    showSettingsMessage(`Renamed icon to ${trimmed}.`);
+    showIconMachineMessage(`Renamed icon to ${trimmed}.`);
     return true;
 }
 
@@ -566,13 +578,22 @@ function purchaseIcon(iconId) {
     const icon = getStoreIcon(iconId);
     if (!icon) return;
 
+    const currentCoins = getCoins();
+    const canAfford = currentCoins >= icon.cost;
+    const purchaseMessage = canAfford
+        ? `You have enough coins! ${icon.title} costs ${icon.cost} coins and you have ${currentCoins}.`
+        : `Not enough coins. ${icon.title} costs ${icon.cost}, but you have ${currentCoins}. You need ${icon.cost - currentCoins} more.`;
+
     openIconMachineModal({
         title: `Buy ${icon.title}`,
-        message: `Spend ${icon.cost} coins to buy ${icon.title}?`,
+        message: purchaseMessage,
         iconId,
         mode: 'buy',
-        submitText: 'Buy'
+        submitText: canAfford ? 'Buy' : 'Not Enough Coins'
     });
+
+    const confirmBtn = document.getElementById('iconMachineModalConfirm');
+    if (confirmBtn) confirmBtn.disabled = !canAfford;
 }
 
 function renameIcon(iconId) {
@@ -992,7 +1013,7 @@ function toggleCompleteQuest(id) {
     if (!q) return;
     // If already claimed, do not allow toggling completion
     if (q.claimed) {
-        showSettingsMessage('This quest has already been claimed.');
+        showDailyQuestMessage('This quest has already been claimed.');
         return;
     }
     q.completed = !q.completed;
@@ -1016,7 +1037,7 @@ function claimQuest(id) {
     saveDailyQuests();
     renderDailyQuests();
     updateQuestStats();
-    showSettingsMessage(`+${q.reward} coins claimed!`);
+    showDailyQuestMessage(`+${q.reward} coins claimed! You now have ${getCoins()} coins.`);
 }
 
 function refreshDailyQuests() {

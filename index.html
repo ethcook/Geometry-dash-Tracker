@@ -52,20 +52,23 @@
             </div>
         </header>
 
+        <div class="app-layout">
         <!-- Navigation Menu -->
-        <nav class="nav-menu">
-            <button class="nav-btn active" onclick="switchPage('dashboard')">⚡ Dashboard</button>
-            <button class="nav-btn" onclick="switchPage('goals')">📋 Goals</button>
-            <button class="nav-btn" onclick="switchPage('demons')">👹 Demons</button>
-            <button class="nav-btn" onclick="switchPage('practice')">🏋️ Practice</button>
-            <button class="nav-btn" onclick="switchPage('weakness')">🎯 Weakness</button>
-            <button class="nav-btn" onclick="switchPage('timeline')">📅 Timeline</button>
-            <button class="nav-btn" onclick="switchPage('stats')">📊 Stats</button>
-            <button class="nav-btn" onclick="switchPage('tiers')">🏆 Tiers</button>
-            <button class="nav-btn" onclick="switchPage('tools')">🛠️ Tools</button>
-            <button class="nav-btn" onclick="switchPage('iconmachine')">🎨 GD Icon Machine</button>
-            <button class="nav-btn" onclick="switchPage('settings')">⚙️ Settings</button>
-        </nav>
+        <aside class="nav-scroll-shell">
+            <nav class="nav-menu" aria-label="Main sections">
+            <button class="nav-btn active" onclick="switchPage('dashboard')" title="Dashboard">⚡ <span>Dashboard</span></button>
+            <button class="nav-btn" onclick="switchPage('goals')" title="Goals">📋 <span>Goals</span></button>
+            <button class="nav-btn" onclick="switchPage('demons')" title="Demons">👹 <span>Demons</span></button>
+            <button class="nav-btn" onclick="switchPage('practice')" title="Practice">🏋️ <span>Practice</span></button>
+            <button class="nav-btn" onclick="switchPage('weakness')" title="Weakness">🎯 <span>Weakness</span></button>
+            <button class="nav-btn" onclick="switchPage('timeline')" title="Timeline">📅 <span>Timeline</span></button>
+            <button class="nav-btn" onclick="switchPage('stats')" title="Stats">📊 <span>Stats</span></button>
+            <button class="nav-btn" onclick="switchPage('tiers')" title="Tiers">🏆 <span>Tiers</span></button>
+            <button class="nav-btn" onclick="switchPage('tools')" title="Tools">🛠️ <span>Tools</span></button>
+            <button class="nav-btn" onclick="switchPage('iconmachine')" title="GD Icon Machine">🎨 <span>GD Icon Machine</span></button>
+            <button class="nav-btn" onclick="switchPage('settings')" title="Settings">⚙️ <span>Settings</span></button>
+            </nav>
+        </aside>
 
         <div class="main-content">
             <!-- Dashboard Page -->
@@ -153,6 +156,7 @@
                             <span id="refreshTimer" class="meta" style="font-size:0.95em; margin-left:6px;">Ready</span>
                             <div class="meta" style="font-size:0.95em; margin-left:10px;">Quests refresh each half an hour. Complete quests to earn points.</div>
                         </div>
+                        <p id="dailyQuestMessage" class="settings-message" aria-live="polite"></p>
                         <div id="dailyQuestsList" class="items-list">
                             <!-- Daily quests will be rendered here -->
                         </div>
@@ -454,6 +458,7 @@
                         <span class="icon-machine-coins">Coins: <strong id="iconMachineCoins">0</strong></span>
                     </div>
                     <p class="meta">Buy icons with coins, name them, and drag them into your showcase to show them off.</p>
+                    <p id="iconMachineMessage" class="settings-message" aria-live="polite"></p>
 
                     <div class="icon-machine-grid">
                         <div class="icon-shop">
@@ -513,6 +518,7 @@
                     </div>
                 </section>
             </div>
+        </div>
         </div>
 
         <footer>
