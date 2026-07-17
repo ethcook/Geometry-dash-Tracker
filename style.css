@@ -3018,8 +3018,9 @@ textarea:focus,
 .auth-modal {
     padding: 20px;
     background:
-        radial-gradient(circle at 20% 10%, rgba(109, 93, 252, 0.36), transparent 28rem),
-        linear-gradient(145deg, #15172b, #25204d);
+        radial-gradient(circle at 20% 10%, rgba(109, 93, 252, 0.18), transparent 28rem),
+        radial-gradient(circle at 85% 85%, rgba(14, 165, 233, 0.1), transparent 24rem),
+        linear-gradient(145deg, #f7f7ff, #e9ecf8);
 }
 
 .auth-container {
@@ -3144,6 +3145,55 @@ body.dark-mode .modal-content {
     background: #181c25;
     border-color: #383e4d;
     color: var(--ink);
+}
+
+body.dark-mode .auth-modal {
+    background:
+        radial-gradient(circle at 20% 10%, rgba(109, 93, 252, 0.2), transparent 28rem),
+        linear-gradient(145deg, #0d1017, #17152b);
+}
+
+body.dark-mode .auth-container {
+    background: #181c25;
+    border-color: #383e4d;
+    color: var(--ink);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
+}
+
+body.dark-mode .auth-header h2,
+body.dark-mode .auth-form h3 {
+    color: var(--ink);
+    -webkit-text-fill-color: var(--ink);
+}
+
+body.dark-mode .auth-input {
+    background: #20242f;
+    border-color: #3b4252;
+    color: var(--ink);
+}
+
+body.dark-mode .auth-input::placeholder {
+    color: #838da0;
+}
+
+body.dark-mode .auth-input:focus {
+    background: #232834;
+    border-color: #8171ff;
+    box-shadow: 0 0 0 3px rgba(129, 113, 255, 0.18);
+}
+
+body.dark-mode .auth-toggle {
+    color: var(--muted);
+}
+
+body.dark-mode .auth-toggle a {
+    color: #b9afff;
+}
+
+body.dark-mode .auth-error {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(251, 113, 133, 0.3);
+    color: #fda4af;
 }
 
 body.dark-mode .btn-danger,
