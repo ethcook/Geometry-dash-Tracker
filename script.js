@@ -135,8 +135,21 @@ function getCoins() {
     return parseInt(localStorage.getItem(COINS_KEY) || '0', 10);
 }
 
+let serverSyncTimer = null;
+function scheduleServerProfileSync() {
+    if (serverSyncTimer) clearTimeout(serverSyncTimer);
+    serverSyncTimer = setTimeout(() => {
+        saveProfileToServer();
+    }, 500);
+}
+
 function saveCoins(n) {
-    localStorage.setItem(COINS_KEY, String(n));
+    try {
+        localStorage.setItem(COINS_KEY, String(n));
+        scheduleServerProfileSync();
+    } catch (e) {
+        console.error('Failed to save coins:', e);
+    }
 }
 
 function addCoins(n) {
@@ -162,7 +175,12 @@ function getIconMachineState() {
 }
 
 function saveIconMachineState(state) {
-    localStorage.setItem(ICON_MACHINE_KEY, JSON.stringify(state));
+    try {
+        localStorage.setItem(ICON_MACHINE_KEY, JSON.stringify(state));
+        scheduleServerProfileSync();
+    } catch (e) {
+        console.error('Failed to save icon machine state:', e);
+    }
 }
 
 function getStoreIcon(iconId) {
@@ -541,7 +559,13 @@ function getStoredData(key, defaultValue) {
 }
 
 function saveStoredData(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+        if (typeof updateSettingsBackupStats === 'function') updateSettingsBackupStats();
+        scheduleServerProfileSync();
+    } catch (e) {
+        console.error(`Failed to save key ${key} to localStorage:`, e);
+    }
 }
 
 // Date helpers for demons
@@ -572,6 +596,53 @@ let editingDemonId = null;
 let tempDemonData = {};
 let timelineFilter = 'all';
 
+function saveAllDataOnUnload() {
+    try {
+        const pid = ensurePlayerId();
+        const username = getUsername();
+        const pfpImage = getPfpImage();
+        const payload = {
+            playerId: pid,
+            username,
+            pfpImage,
+            goals: getGoals(),
+            demons: getDemons(),
+            sessions: getSessions(),
+            weaknesses: getWeaknesses(),
+            top10Beaten: getTop10Beaten(),
+            iconMachineState: getIconMachineState(),
+            coins: getCoins(),
+            questPoints: getQuestPoints(),
+            darkMode: localStorage.getItem(DARK_MODE_KEY) === 'true'
+        };
+
+        localStorage.setItem(GOALS_KEY, JSON.stringify(payload.goals));
+        localStorage.setItem(DEMONS_KEY, JSON.stringify(payload.demons));
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(payload.sessions));
+        localStorage.setItem(WEAKNESSES_KEY, JSON.stringify(payload.weaknesses));
+        localStorage.setItem(TOP_10_DEMONS_KEY, JSON.stringify(payload.top10Beaten));
+        localStorage.setItem(ICON_MACHINE_KEY, JSON.stringify(payload.iconMachineState));
+        localStorage.setItem(COINS_KEY, String(payload.coins));
+        localStorage.setItem(QUEST_POINTS_KEY, String(payload.questPoints));
+        localStorage.setItem(USERNAME_KEY, payload.username);
+        if (payload.pfpImage) {
+            localStorage.setItem(PFP_IMAGE_KEY, payload.pfpImage);
+        } else {
+            localStorage.removeItem(PFP_IMAGE_KEY);
+        }
+
+        if (navigator.sendBeacon) {
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            navigator.sendBeacon('/api/profiles', blob);
+        }
+    } catch (e) {
+        console.warn('Unload save error:', e);
+    }
+}
+
+window.addEventListener('beforeunload', saveAllDataOnUnload);
+window.addEventListener('pagehide', saveAllDataOnUnload);
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     initDarkMode();
@@ -579,7 +650,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const usernameInput = document.getElementById('usernameInput');
     if (usernameInput) {
-        usernameInput.value = getUsername();
+        const storedUser = localStorage.getItem(USERNAME_KEY);
+        usernameInput.value = storedUser || '';
+        persistUsernameDraft();
     }
     loadProfileFromServer();
 
@@ -1680,23 +1753,62 @@ function resetWeaknesses() {
 // ============= CLEAR ALL DATA =============
 
 function clearAllData() {
-    openConfirmModal('⚠️ This will delete ALL your data (goals, demons, sessions, weaknesses, top 10 status). Are you sure?', 'Delete all data', () => {
-        openConfirmModal('This action cannot be undone. Delete everything?', 'Final confirmation', () => {
-            localStorage.removeItem(GOALS_KEY);
-            localStorage.removeItem(DEMONS_KEY);
-            localStorage.removeItem(SESSIONS_KEY);
-            localStorage.removeItem(WEAKNESSES_KEY);
-            localStorage.removeItem(TOP_10_DEMONS_KEY);
+    openConfirmModal('⚠️ This will delete ALL your data (goals, beaten demons, practice, weaknesses, top 10 demons, icon machine, chatbot history, PFP, and username). Are you sure?', 'Delete all data', () => {
+        openConfirmModal('This action cannot be undone. Delete everything including profile, username, and PFP?', 'Final confirmation', async () => {
+            const oldPid = localStorage.getItem(PLAYER_ID_KEY);
 
+            // 1. Wipe ALL keys from LocalStorage completely
+            localStorage.clear();
+
+            // 2. Reset input controls & header username
+            const usernameInput = document.getElementById('usernameInput');
+            if (usernameInput) usernameInput.value = '';
+
+            const pfpUpload = document.getElementById('pfpUpload');
+            if (pfpUpload) pfpUpload.value = '';
+
+            const welcomeMsg = document.getElementById('welcomeMessage');
+            if (welcomeMsg) welcomeMsg.textContent = `Welcome, ${DEFAULT_USERNAME}`;
+
+            // 3. Reset in-memory chat state & render default smiley PFP
+            chatMessages = [];
+            renderPfp();
+
+            // 4. Reload & re-render all app views
             loadGoals();
             loadDemons();
             loadSessions();
             loadWeaknesses();
             loadDemonList();
+            loadIconMachine();
+            updateCoinsUI();
+            clearChat();
+
+            if (typeof renderDailyQuests === 'function') renderDailyQuests();
+            if (typeof renderTiers === 'function') renderTiers();
+
+            // 5. Clean up old server profile record if present
+            if (oldPid) {
+                try {
+                    await fetch('/api/profiles', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ playerId: oldPid, username: DEFAULT_USERNAME, pfpImage: '' })
+                    });
+                } catch {
+                    // Ignore offline errors
+                }
+            }
+
+            // 6. Generate fresh Player ID and sync clean profile
+            ensurePlayerId();
+            await saveProfileToServer({ username: DEFAULT_USERNAME, pfpImage: '' });
+
+            // 7. Update stats cards & backup indicators
             updateAllStats();
             updateSettingsBackupStats();
 
-            openAlertModal('All tracker data has been cleared.', 'Data Cleared', '🗑️');
+            openAlertModal('All tracker data, beaten demons, goals, icon machine items, chatbot history, profile picture, and username have been completely cleared.', 'Data Cleared', '🗑️');
         }, 'Delete everything');
     }, 'Continue');
 }
@@ -2234,8 +2346,27 @@ function saveUsername() {
     if (msg) msg.textContent = 'Username saved successfully!';
 }
 
+function resetUsername() {
+    localStorage.removeItem(USERNAME_KEY);
+    const input = document.getElementById('usernameInput');
+    if (input) input.value = '';
+    const headerMeta = document.getElementById('welcomeMessage');
+    if (headerMeta) {
+        headerMeta.textContent = `Welcome, ${DEFAULT_USERNAME}`;
+    }
+    saveProfileToServer({ username: DEFAULT_USERNAME });
+    const msg = document.getElementById('settingsMessage');
+    if (msg) msg.textContent = 'Username reset to default (Player).';
+}
+
 function getPfpImage() {
     return localStorage.getItem(PFP_IMAGE_KEY) || '';
+}
+
+function createEmojiSvgDataUrl(emoji, bgColor = '#3b82f6') {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%"><defs><linearGradient id="presetGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${bgColor}"/><stop offset="100%" stop-color="#0f172a"/></linearGradient></defs><rect width="100" height="100" rx="50" fill="url(#presetGrad)"/><text x="50" y="55" font-size="54" text-anchor="middle" dominant-baseline="central">${emoji}</text></svg>`;
+    const base64 = btoa(unescape(encodeURIComponent(svgContent)));
+    return `data:image/svg+xml;base64,${base64}`;
 }
 
 function renderPfp() {
@@ -2243,43 +2374,107 @@ function renderPfp() {
     const headerAvatar = document.getElementById('headerAvatar');
     const settingsPreview = document.getElementById('settingsAvatarPreview');
 
-    const defaultSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🤖</text></svg>`;
+    const defaultDataUrl = createEmojiSvgDataUrl('😊', '#3b82f6');
+    const displaySrc = pfp || defaultDataUrl;
+
+    const imgHtml = `<img src="${displaySrc}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultDataUrl}';">`;
 
     if (headerAvatar) {
-        headerAvatar.innerHTML = pfp ? `<img src="${pfp}" alt="Avatar">` : defaultSvg;
+        headerAvatar.innerHTML = imgHtml;
     }
     if (settingsPreview) {
-        settingsPreview.innerHTML = pfp ? `<img src="${pfp}" alt="Avatar">` : defaultSvg;
+        settingsPreview.innerHTML = imgHtml;
     }
 }
 
-function handlePfpUpload(event) {
+function resizeImageToCanvas(file, maxWidth = 256, maxHeight = 256, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    const minDim = Math.min(width, height);
+                    const sx = (width - minDim) / 2;
+                    const sy = (height - minDim) / 2;
+
+                    canvas.width = maxWidth;
+                    canvas.height = maxHeight;
+                    const ctx = canvas.getContext('2d');
+
+                    ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, maxWidth, maxHeight);
+
+                    let resizedDataUrl = canvas.toDataURL('image/webp', quality);
+                    if (!resizedDataUrl || resizedDataUrl.length < 100 || !resizedDataUrl.startsWith('data:image/webp')) {
+                        resizedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    }
+                    resolve(resizedDataUrl);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            img.onerror = () => reject(new Error('Failed to load image file.'));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('Failed to read image file.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handlePfpUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-        openAlertModal('Please select an image file.', 'Invalid File', '🖼️');
+        openAlertModal('Please select a valid image file.', 'Invalid File', '🖼️');
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const base64 = e.target?.result;
-        if (typeof base64 === 'string') {
+    const msg = document.getElementById('settingsMessage');
+    if (msg) msg.textContent = 'Processing profile picture...';
+
+    try {
+        const base64 = await resizeImageToCanvas(file, 256, 256, 0.85);
+        try {
             localStorage.setItem(PFP_IMAGE_KEY, base64);
-            renderPfp();
-            saveProfileToServer({ pfpImage: base64 });
-            const msg = document.getElementById('settingsMessage');
-            if (msg) msg.textContent = 'Profile picture updated!';
+        } catch (storageErr) {
+            console.warn('LocalStorage save failed:', storageErr);
         }
-    };
-    reader.readAsDataURL(file);
+        renderPfp();
+        await saveProfileToServer({ pfpImage: base64 });
+
+        if (msg) msg.textContent = 'Profile picture updated successfully!';
+    } catch (err) {
+        console.error('PFP upload error:', err);
+        openAlertModal('Could not process the selected image. Please try a different image.', 'Upload Error', '⚠️');
+        if (msg) msg.textContent = '';
+    }
 }
 
-function clearPfpImage() {
-    localStorage.removeItem(PFP_IMAGE_KEY);
+function selectPresetAvatar(emoji, bgColor = '#3b82f6') {
+    const svgDataUrl = createEmojiSvgDataUrl(emoji, bgColor);
+
+    try {
+        localStorage.setItem(PFP_IMAGE_KEY, svgDataUrl);
+    } catch (e) {
+        console.warn('LocalStorage save failed:', e);
+    }
     renderPfp();
-    saveProfileToServer({ pfpImage: '' });
+    saveProfileToServer({ pfpImage: svgDataUrl });
+    const msg = document.getElementById('settingsMessage');
+    if (msg) msg.textContent = `Profile picture set to ${emoji}!`;
+}
+
+async function clearPfpImage() {
+    localStorage.removeItem(PFP_IMAGE_KEY);
+    const pfpUpload = document.getElementById('pfpUpload');
+    if (pfpUpload) pfpUpload.value = '';
+    renderPfp();
+    await saveProfileToServer({ pfpImage: '' });
     const msg = document.getElementById('settingsMessage');
     if (msg) msg.textContent = 'Profile picture removed.';
 }
@@ -2301,16 +2496,55 @@ async function loadProfileFromServer() {
         const res = await fetch(`/api/profiles/${encodeURIComponent(pid)}`);
         if (res.ok) {
             const data = await res.json();
-            if (data.username) {
+            if (data.username && data.username !== DEFAULT_USERNAME) {
                 localStorage.setItem(USERNAME_KEY, data.username);
                 const usernameInput = document.getElementById('usernameInput');
                 if (usernameInput) usernameInput.value = data.username;
                 persistUsernameDraft();
+            } else if (data.username === DEFAULT_USERNAME) {
+                localStorage.removeItem(USERNAME_KEY);
+                const usernameInput = document.getElementById('usernameInput');
+                if (usernameInput) usernameInput.value = '';
+                persistUsernameDraft();
             }
-            if (data.pfpImage) {
-                localStorage.setItem(PFP_IMAGE_KEY, data.pfpImage);
+            if (typeof data.pfpImage === 'string') {
+                if (data.pfpImage) {
+                    localStorage.setItem(PFP_IMAGE_KEY, data.pfpImage);
+                } else {
+                    localStorage.removeItem(PFP_IMAGE_KEY);
+                }
                 renderPfp();
             }
+            if (Array.isArray(data.goals) && data.goals.length > 0 && getGoals().length === 0) {
+                localStorage.setItem(GOALS_KEY, JSON.stringify(data.goals));
+                loadGoals();
+            }
+            if (Array.isArray(data.demons) && data.demons.length > 0 && getDemons().length === 0) {
+                localStorage.setItem(DEMONS_KEY, JSON.stringify(data.demons));
+                loadDemons();
+            }
+            if (Array.isArray(data.sessions) && data.sessions.length > 0 && getSessions().length === 0) {
+                localStorage.setItem(SESSIONS_KEY, JSON.stringify(data.sessions));
+                loadSessions();
+            }
+            if (data.weaknesses && typeof data.weaknesses === 'object' && Object.keys(getWeaknesses()).length === 0) {
+                localStorage.setItem(WEAKNESSES_KEY, JSON.stringify(data.weaknesses));
+                loadWeaknesses();
+            }
+            if (Array.isArray(data.top10Beaten) && data.top10Beaten.length > 0 && getTop10Beaten().length === 0) {
+                localStorage.setItem(TOP_10_DEMONS_KEY, JSON.stringify(data.top10Beaten));
+                loadDemonList();
+            }
+            if (data.iconMachineState && getIconMachineState().purchased.length === 0) {
+                localStorage.setItem(ICON_MACHINE_KEY, JSON.stringify(data.iconMachineState));
+                loadIconMachine();
+            }
+            if (typeof data.coins === 'number' && getCoins() === 0) {
+                localStorage.setItem(COINS_KEY, String(data.coins));
+                updateCoinStat();
+            }
+            updateAllStats();
+            updateSettingsBackupStats();
         }
     } catch {
         // Fallback to local data if offline or server API isn't running
@@ -2322,11 +2556,26 @@ async function saveProfileToServer(updates = {}) {
     const username = updates.username !== undefined ? updates.username : getUsername();
     const pfpImage = updates.pfpImage !== undefined ? updates.pfpImage : getPfpImage();
 
+    const payload = {
+        playerId: pid,
+        username,
+        pfpImage,
+        goals: getGoals(),
+        demons: getDemons(),
+        sessions: getSessions(),
+        weaknesses: getWeaknesses(),
+        top10Beaten: getTop10Beaten(),
+        iconMachineState: getIconMachineState(),
+        coins: getCoins(),
+        questPoints: getQuestPoints(),
+        darkMode: localStorage.getItem(DARK_MODE_KEY) === 'true'
+    };
+
     try {
         await fetch('/api/profiles', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playerId: pid, username, pfpImage })
+            body: JSON.stringify(payload)
         });
     } catch {
         // Silently preserve local storage
@@ -2358,10 +2607,27 @@ function toggleDarkMode(isDark) {
 function loadChatHistory() {
     chatMessages = getStoredData(CHAT_HISTORY_KEY, []);
     renderChatMessages();
+    updateChatSendButtonState();
 }
 
 function saveChatHistory() {
     saveStoredData(CHAT_HISTORY_KEY, chatMessages);
+}
+
+function formatChatMessageMarkdown(text) {
+    if (!text) return '';
+    let html = escapeHtml(text);
+    // Bold: **text**
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic: *text*
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    // Code blocks: ```code```
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    // Inline code: `code`
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Line breaks
+    html = html.replace(/\n/g, '<br>');
+    return html;
 }
 
 function renderChatMessages() {
@@ -2376,12 +2642,76 @@ function renderChatMessages() {
 
     chatMessages.forEach(msg => {
         const div = document.createElement('div');
-        div.className = `chat-message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`;
-        div.innerHTML = `<div class="chat-bubble">${escapeHtml(msg.content)}</div>`;
+        const isUser = msg.role === 'user';
+        div.className = `chat-message ${isUser ? 'user' : 'assistant'}`;
+        div.innerHTML = `
+            <div class="chat-message-label">${isUser ? '👤 You' : '🤖 GD Assistant'}</div>
+            <div class="chat-message-content">${isUser ? escapeHtml(msg.content) : formatChatMessageMarkdown(msg.content)}</div>
+        `;
         container.appendChild(div);
     });
 
     container.scrollTop = container.scrollHeight;
+}
+
+function updateChatSendButtonState() {
+    const input = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendChatBtn');
+    if (!input || !sendBtn) return;
+    const hasText = Boolean(input.value.trim());
+    sendBtn.disabled = !hasText || chatRequestPending;
+}
+
+function useQuickPrompt(promptText) {
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+    input.value = promptText;
+    updateChatSendButtonState();
+    sendChatMessage();
+}
+
+function showChatTypingIndicator() {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+    hideChatTypingIndicator();
+    const typingEl = document.createElement('div');
+    typingEl.id = 'chatTypingIndicator';
+    typingEl.className = 'chat-message assistant typing';
+    typingEl.innerHTML = `
+        <div class="chat-message-label">🤖 GD Assistant</div>
+        <div class="chat-message-content">
+            <span class="chat-loading">Thinking...</span>
+        </div>
+    `;
+    container.appendChild(typingEl);
+    container.scrollTop = container.scrollHeight;
+}
+
+function hideChatTypingIndicator() {
+    const typingEl = document.getElementById('chatTypingIndicator');
+    if (typingEl) typingEl.remove();
+}
+
+function getLocalGdChatbotReply(userQuery) {
+    const q = userQuery.toLowerCase();
+    
+    if (q.includes('top 1') || q.includes('hardest demon') || q.includes('pointercrate')) {
+        return "🏆 **Pointercrate Demon List Top 1:**\nCurrently, **Tidal Wave** by OniLink (verified by Trick) or **Acheron** / **Avernus** / **Slaughterhouse** top the Demon List as the hardest rated Extreme Demons in Geometry Dash!";
+    }
+    if (q.includes('bloodlust') || q.includes('cataclysm') || q.includes('bloodbath')) {
+        return "👹 **Classic Extreme Demons:**\n- **Cataclysm** by GBOY: The pioneer of Extreme Demons.\n- **Bloodbath** by Riot & More: The iconic mega-collab that defined GD history.\n- **Bloodlust** by Knobbelboy: The massive, buffed extension of Bloodbath!";
+    }
+    if (q.includes('2.2') || q.includes('update') || q.includes('swing')) {
+        return "⚡ **Geometry Dash 2.2 Features:**\n- **New Game Mode:** Swing Copter!\n- **Platformer Mode:** Play custom platformer levels with checkpoints.\n- **New Shop & Secret Rooms:** Mechanics, Music Library, and 2.2 Editor Triggers (Camera, Reverse, Teleport, Shader FX).";
+    }
+    if (q.includes('practice') || q.includes('checkpoint') || q.includes('beat') || q.includes('tip')) {
+        return "🏋️ **Demon Slaying & Practice Tips:**\n1. **Use Startpos / Practice Mode:** Place checkpoints to master difficult transitions (especially 60-100%).\n2. **Break it into runs:** Do 50-100%, 30-70%, and 0-50% before full attempts.\n3. **Consistency over grinding:** Take breaks when frustrated to prevent nerve control fails!";
+    }
+    if (q.includes('icon') || q.includes('coin') || q.includes('store')) {
+        return "🎨 **GD Icon Machine & Coins:**\nEarn GD Coins in this tracker by beating Demons and completing Daily Quests! Use your coins in the **GD Icon Machine** page to buy, rename, and showcase custom icons.";
+    }
+
+    return `🎮 **Geometry Dash Assistant:**\nThat's a great question about *"${userQuery}"*! As a GD Tracker companion, I can help you track your goals, analyze demon difficulties, optimize practice runs, and manage your progress. Keep grinding and slaying those demons! 🚀`;
 }
 
 async function sendChatMessage() {
@@ -2405,7 +2735,8 @@ async function sendChatMessage() {
 
     input.value = '';
     chatRequestPending = true;
-    if (sendBtn) sendBtn.disabled = true;
+    updateChatSendButtonState();
+    showChatTypingIndicator();
 
     try {
         const res = await fetch('/api/chat', {
@@ -2413,20 +2744,33 @@ async function sendChatMessage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: chatMessages })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Server error.');
+        hideChatTypingIndicator();
 
-        chatMessages.push({ role: 'assistant', content: data.reply });
+        let replyText = '';
+        if (res.ok) {
+            const data = await res.json();
+            replyText = data.reply;
+        } else {
+            // Local GD knowledge fallback if server API is unconfigured or offline
+            replyText = getLocalGdChatbotReply(text);
+        }
+
+        chatMessages.push({ role: 'assistant', content: replyText });
         if (chatMessages.length > CHAT_MAX_MESSAGES) {
             chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
         }
         saveChatHistory();
         renderChatMessages();
     } catch (err) {
-        if (errorEl) errorEl.textContent = err.message;
+        hideChatTypingIndicator();
+        // Smart fallback on network error
+        const replyText = getLocalGdChatbotReply(text);
+        chatMessages.push({ role: 'assistant', content: replyText });
+        saveChatHistory();
+        renderChatMessages();
     } finally {
         chatRequestPending = false;
-        if (sendBtn) sendBtn.disabled = false;
+        updateChatSendButtonState();
     }
 }
 
@@ -2434,6 +2778,7 @@ function clearChat() {
     chatMessages = [];
     saveChatHistory();
     renderChatMessages();
+    updateChatSendButtonState();
     const errorEl = document.getElementById('chatError');
     if (errorEl) errorEl.textContent = '';
 }

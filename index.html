@@ -668,18 +668,29 @@
                     <div class="section-header chatbot-header">
                         <div>
                             <h2 id="chatbotTitle">🤖 The GD Chatbot</h2>
-                            <p class="meta">Ask a general question. Responses use Gemini 3.1 Flash Lite through OpenRouter.</p>
+                            <p class="meta">Ask any question about Geometry Dash, demons, tactics, 2.2 updates, or icon unlocks.</p>
                         </div>
                         <button id="clearChatBtn" type="button" class="btn btn-danger btn-small" onclick="clearChat()">Clear Chat</button>
                     </div>
+
                     <div id="chatMessages" class="chat-messages" role="log" aria-live="polite" aria-relevant="additions">
                         <div class="chat-empty" id="chatEmpty">Start a conversation by asking a question below.</div>
                     </div>
                     <p id="chatError" class="chat-error" role="alert"></p>
+
+                    <div class="chat-suggestions">
+                        <span class="chat-suggestions-label">Try asking:</span>
+                        <button type="button" class="chat-suggestion-chip" onclick="useQuickPrompt('🏆 What is the Pointercrate Top 1 Extreme Demon right now?')">🏆 Top 1 Demon</button>
+                        <button type="button" class="chat-suggestion-chip" onclick="useQuickPrompt('👹 What are the best tips to beat Extreme Demons?')">👹 Beat Extreme Demons</button>
+                        <button type="button" class="chat-suggestion-chip" onclick="useQuickPrompt('⚡ What are the main new features in Geometry Dash 2.2?')">⚡ GD 2.2 Features</button>
+                        <button type="button" class="chat-suggestion-chip" onclick="useQuickPrompt('🏋️ How should I use practice mode and checkpoints effectively?')">🏋️ Practice Tips</button>
+                        <button type="button" class="chat-suggestion-chip" onclick="useQuickPrompt('🎨 How do GD coins and the Icon Machine work?')">🎨 Icon Machine</button>
+                    </div>
+
                     <div class="chat-composer">
                         <label class="sr-only" for="chatInput">Message the chatbot</label>
-                        <textarea id="chatInput" rows="3" maxlength="4000" placeholder="Ask me anything..."></textarea>
-                        <button id="sendChatBtn" type="button" class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+                        <textarea id="chatInput" rows="3" maxlength="4000" placeholder="Ask me anything about Geometry Dash..." oninput="updateChatSendButtonState()"></textarea>
+                        <button id="sendChatBtn" type="button" class="btn btn-primary" onclick="sendChatMessage()" disabled>Send</button>
                     </div>
                     <p class="meta chat-hint">Press Enter to send or Shift+Enter for a new line.</p>
                 </section>
@@ -708,6 +719,7 @@
                                 <div class="input-group">
                                     <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="30">
                                     <button onclick="saveUsername()" class="btn btn-primary">Save Username</button>
+                                    <button onclick="resetUsername()" class="btn btn-secondary btn-small">Reset Username</button>
                                 </div>
                             </div>
 
@@ -721,6 +733,23 @@
                                     <label for="pfpUpload" class="upload-label btn btn-secondary btn-small">📁 Upload Picture</label>
                                     <input type="file" id="pfpUpload" accept="image/*" onchange="handlePfpUpload(event)" style="display:none;">
                                     <button onclick="clearPfpImage()" class="btn btn-danger btn-small">Remove Picture</button>
+                                </div>
+                            </div>
+
+                            <div class="preset-avatar-container">
+                                <div class="preset-avatar-label">Or choose a GD preset avatar:</div>
+                                <div class="preset-avatar-grid">
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('😊', '#3b82f6')" title="Smiley Face">😊</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('🤖', '#1e293b')" title="Robot">🤖</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('🟩', '#0f766e')" title="Cube">🟩</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('👹', '#991b1b')" title="Demon">👹</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('🚀', '#1e40af')" title="Ship">🚀</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('⚡', '#854d0e')" title="Wave">⚡</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('⭐', '#b45309')" title="Star">⭐</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('🏆', '#a16207')" title="Trophy">🏆</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('😎', '#4c1d95')" title="Cool Cube">😎</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('🐉', '#065f46')" title="Dragon">🐉</button>
+                                    <button type="button" class="preset-avatar-btn" onclick="selectPresetAvatar('🔮', '#581c87')" title="Magic Orb">🔮</button>
                                 </div>
                             </div>
                         </div>

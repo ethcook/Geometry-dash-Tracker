@@ -197,17 +197,26 @@ async function handleApi(request, response, pathname) {
         const username = typeof body.username === 'string' ? body.username.trim().slice(0, 30) : '';
         const pfpImage = typeof body.pfpImage === 'string' ? body.pfpImage : '';
 
-        if (!/^[a-zA-Z0-9-]{16,80}$/.test(playerId) || !username) {
+        if (!/^[a-zA-Z0-9_-]{16,80}$/.test(playerId) || !username) {
             return sendJson(response, 400, { error: 'A valid player ID and username are required.' });
         }
-        if (pfpImage && !/^data:image\/(png|jpeg|webp|gif);base64,/i.test(pfpImage)) {
-            return sendJson(response, 400, { error: 'Invalid profile picture.' });
+        if (pfpImage && !/^(data:image\/[a-zA-Z0-9\+\-\.]+;(base64|utf8),|https?:\/\/)/i.test(pfpImage)) {
+            return sendJson(response, 400, { error: 'Invalid profile picture format.' });
         }
 
         const saved = await saveProfile(playerId, {
             playerId,
             username,
-            pfpImage
+            pfpImage,
+            goals: Array.isArray(body.goals) ? body.goals : [],
+            demons: Array.isArray(body.demons) ? body.demons : [],
+            sessions: Array.isArray(body.sessions) ? body.sessions : [],
+            weaknesses: typeof body.weaknesses === 'object' && body.weaknesses !== null ? body.weaknesses : {},
+            top10Beaten: Array.isArray(body.top10Beaten) ? body.top10Beaten : [],
+            iconMachineState: typeof body.iconMachineState === 'object' && body.iconMachineState !== null ? body.iconMachineState : { purchased: [], showcase: [] },
+            coins: typeof body.coins === 'number' ? body.coins : 0,
+            questPoints: typeof body.questPoints === 'number' ? body.questPoints : 0,
+            darkMode: Boolean(body.darkMode)
         });
         return sendJson(response, saved.existed ? 200 : 201, saved.profile);
     }
