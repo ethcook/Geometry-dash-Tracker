@@ -1,28 +1,34 @@
 # Geometry Dash Tracker
 
-A local Geometry Dash progress tracker with an OpenRouter-powered general-purpose chatbot.
+A small web app for tracking Geometry Dash goals, demons, practice sessions, daily quests, coins, weaknesses, and player progress.
 
-## Run locally
+## Features
 
-Requires Node.js 20.6 or newer and an OpenRouter API key. Add the key to the ignored `.env` file:
+- Track goals, demons, attempt counts, and difficulty progress
+- Log practice sessions and store progress in the browser
+- Manage daily quests, quest points, and an icon machine-style shop
+- View dashboard stats and a progress timeline
+- Use a built-in chatbot powered by OpenRouter
 
-```dotenv
-OPENROUTER_API_KEY=your-key-here
+## Run Locally
+
+Requires Node.js 20.6+ and an OpenRouter API key.
+
+Create a `.env` file:
+
+```env
+OPENROUTER_API_KEY=your-key
 OPENROUTER_MODEL=google/gemini-3.1-flash-lite
 ```
 
-Then start the server and open `http://localhost:3000`:
+Then run:
 
 ```sh
 npm start
 ```
 
-The key is read only by the Node server and is never sent to the browser.
+Open the app at <http://localhost:3000>.
 
-The chatbot defaults to Gemini 3.1 Flash Lite through OpenRouter. Change `OPENROUTER_MODEL` if you want to use another OpenRouter model. To attribute requests to a deployed site, optionally set `OPENROUTER_SITE_URL` as well:
+## License
 
-```dotenv
-OPENROUTER_SITE_URL=https://example.com
-```
-
-Keep API keys out of source control. Local `.env` files are ignored; for deployment, configure the same variables in your hosting provider's secret settings.
+Unlicensed.

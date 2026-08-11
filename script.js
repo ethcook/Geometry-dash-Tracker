@@ -13,6 +13,9 @@ const PLAYER_ID_KEY = 'gdPlayerId';
 const CHAT_HISTORY_KEY = 'gdChatHistory';
 const CHAT_MAX_MESSAGES = 20;
 const CHAT_MAX_MESSAGE_LENGTH = 4000;
+const ADMIN_OWNER_UNLOCKED_KEY = 'gdAdminOwnerUnlocked';
+const ADMIN_OWNER_DELETED_KEY = 'gdAdminOwnerDeleted';
+const ADMIN_OWNER_UNLOCK_CODE = atob('MTIzNA==');
 
 let dailyQuests = [];
 let chatMessages = [];
@@ -767,14 +770,47 @@ async function sendChatMessage() {
     }
 }
 
+function openConfirmModal(message, title = 'Confirm Action', onConfirm = null, confirmText = 'Confirm') {
+    const modal = document.getElementById('confirmModal');
+    const titleEl = document.getElementById('confirmModalTitle');
+    const messageEl = document.getElementById('confirmModalMessage');
+    const confirmBtn = document.getElementById('confirmModalConfirm');
+    const cancelBtn = document.getElementById('confirmModalCancel');
+
+    if (!modal || !titleEl || !messageEl || !confirmBtn || !cancelBtn) return;
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+    confirmBtn.className = 'btn btn-danger';
+
+    window.__confirmAction = onConfirm || null;
+    modal.classList.add('show');
+}
+
+function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal) modal.classList.remove('show');
+    window.__confirmAction = null;
+}
+
+function commitConfirmModal() {
+    const action = window.__confirmAction;
+    closeConfirmModal();
+    if (typeof action === 'function') {
+        action();
+    }
+}
+
 function clearChat() {
     if (chatRequestPending || chatMessages.length === 0) return;
-    if (!confirm('Clear the entire chat history?')) return;
-    chatMessages = [];
-    localStorage.removeItem(CHAT_HISTORY_KEY);
-    showChatError();
-    renderChatMessages();
-    document.getElementById('chatInput')?.focus();
+    openConfirmModal('Clear the entire chat history?', 'Clear chat history', () => {
+        chatMessages = [];
+        localStorage.removeItem(CHAT_HISTORY_KEY);
+        showChatError();
+        renderChatMessages();
+        document.getElementById('chatInput')?.focus();
+    }, 'Clear');
 }
 
 function getPlayerId() {
@@ -1241,13 +1277,14 @@ function refreshDailyQuests() {
         alert(`Please wait ${formatMsToMMSS(rem)} before refreshing quests.`);
         return;
     }
-    if (confirm('Generate a new set of daily quests now? This will replace today\'s quests.')) {
+
+    openConfirmModal('Generate a new set of daily quests now? This will replace today\'s quests.', 'Refresh quests', () => {
         generateDailyQuests();
         setLastRefresh(Date.now());
         renderDailyQuests();
         updateQuestStats();
         updateRefreshTimerUI();
-    }
+    }, 'Refresh');
 }
 
 function updateQuestStats() {
@@ -1364,11 +1401,11 @@ function loadGoals() {
 }
 
 function clearGoals() {
-    if (confirm('Are you sure you want to delete all goals?')) {
+    openConfirmModal('Are you sure you want to delete all goals?', 'Delete all goals', () => {
         saveGoals([]);
         loadGoals();
         updateStats();
-    }
+    }, 'Delete');
 }
 
 // ============= DEMONS MANAGEMENT =============
@@ -1593,11 +1630,11 @@ function loadDemons() {
 }
 
 function clearDemons() {
-    if (confirm('Are you sure you want to delete all beaten demons?')) {
+    openConfirmModal('Are you sure you want to delete all beaten demons?', 'Delete all demons', () => {
         saveDemons([]);
         loadDemons();
         updateAllStats();
-    }
+    }, 'Delete');
 }
 
 function groupDemonsByDifficulty(demons) {
@@ -1713,11 +1750,11 @@ function loadSessions() {
 }
 
 function clearSessions() {
-    if (confirm('Are you sure you want to delete all practice sessions?')) {
+    openConfirmModal('Are you sure you want to delete all practice sessions?', 'Delete all sessions', () => {
         saveSessions([]);
         loadSessions();
         updateAllStats();
-    }
+    }, 'Delete');
 }
 
 // ============= WEAKNESS TRACKER =============
@@ -2037,18 +2074,18 @@ function updateDetailedStats() {
 // ============= WEAKNESS RESET =============
 
 function resetWeaknesses() {
-    if (confirm('Are you sure you want to reset all weakness data?')) {
+    openConfirmModal('Are you sure you want to reset all weakness data?', 'Reset weakness data', () => {
         saveWeaknesses({});
         initWeaknessButtons();
         updateWeaknessStats();
-    }
+    }, 'Reset');
 }
 
 // ============= CLEAR ALL DATA =============
 
 function clearAllData() {
-    if (confirm('⚠️ This will delete ALL your data (goals, demons, sessions, weaknesses). Are you sure?')) {
-        if (confirm('This action cannot be undone. Delete everything?')) {
+    openConfirmModal('⚠️ This will delete ALL your data (goals, demons, sessions, weaknesses). Are you sure?', 'Delete all data', () => {
+        openConfirmModal('This action cannot be undone. Delete everything?', 'Final confirmation', () => {
             localStorage.removeItem(GOALS_KEY);
             localStorage.removeItem(DEMONS_KEY);
             localStorage.removeItem(SESSIONS_KEY);
@@ -2061,8 +2098,8 @@ function clearAllData() {
             updateAllStats();
 
             alert('All data has been cleared.');
-        }
-    }
+        }, 'Delete everything');
+    }, 'Continue');
 }
 
 // ============= SESSION STATS =============
@@ -2111,6 +2148,58 @@ function updateWeaknessStats() {
     }
 }
 
+// ============= IMPORT DATA =============
+
+function importData() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/json,.json';
+    fileInput.style.display = 'none';
+
+    fileInput.addEventListener('change', async () => {
+        const [file] = fileInput.files || [];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+
+            if (!parsed || typeof parsed !== 'object') {
+                throw new Error('The selected file is not a valid tracker export.');
+            }
+
+            const goals = Array.isArray(parsed.goals) ? parsed.goals : [];
+            const demons = Array.isArray(parsed.demons) ? parsed.demons : [];
+            const sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+            const weaknesses = parsed.weaknesses && typeof parsed.weaknesses === 'object' ? parsed.weaknesses : {};
+
+            openConfirmModal('Import this data and replace the current tracker data?', 'Import data', () => {
+                localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
+                localStorage.setItem(DEMONS_KEY, JSON.stringify(demons));
+                localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+                localStorage.setItem(WEAKNESSES_KEY, JSON.stringify(weaknesses));
+
+                loadGoals();
+                loadDemons();
+                loadSessions();
+                loadWeaknesses();
+                updateAllStats();
+                renderTierDisplay();
+                renderTierRankDisplay();
+
+                alert('Data imported successfully.');
+            }, 'Import');
+        } catch (error) {
+            console.error(error);
+            alert(error.message || 'There was a problem importing that data file.');
+        }
+    });
+
+    document.body.appendChild(fileInput);
+    fileInput.click();
+    fileInput.remove();
+}
+
 // ============= EXPORT DATA =============
 
 function exportData() {
@@ -2153,6 +2242,20 @@ function escapeHtml(text) {
 // ============= TIER SYSTEM =============
 
 const TIER_DEFINITIONS = [
+    {
+        name: 'Admins & Owners',
+        emoji: '🔐',
+        color: '#8B5CF6',
+        isCodeLocked: true,
+        unlockCode: ADMIN_OWNER_UNLOCK_CODE,
+        requirements: {
+            minDemonsBeaten: 100,
+            extremeDemonsBeaten: 20,
+            insaneDemonsBeaten: 40,
+            minTotalPracticeTime: 9000,
+            description: 'Admins & Owners only. Unlock with a private code.'
+        }
+    },
     {
         name: 'God',
         emoji: '👑',
@@ -2215,6 +2318,112 @@ const TIER_DEFINITIONS = [
     }
 ];
 
+function isAdminOwnerTierUnlocked() {
+    return localStorage.getItem(ADMIN_OWNER_UNLOCKED_KEY) === 'true';
+}
+
+function isAdminOwnerTierDeleted() {
+    return localStorage.getItem(ADMIN_OWNER_DELETED_KEY) === 'true';
+}
+
+function getEffectiveTierDefinitions() {
+    if (isAdminOwnerTierDeleted()) {
+        return TIER_DEFINITIONS.filter(tier => tier.name !== 'Admins & Owners');
+    }
+
+    return TIER_DEFINITIONS;
+}
+
+function getProgressionTierDefinitions() {
+    return getEffectiveTierDefinitions();
+}
+
+function getUnlockedTierDefinitions() {
+    const visible = getEffectiveTierDefinitions();
+    if (isAdminOwnerTierUnlocked()) {
+        return visible;
+    }
+
+    return visible.filter(tier => tier.name !== 'Admins & Owners');
+}
+
+function syncAdminOwnerControls() {
+    const deleteBtn = document.getElementById('deleteAdminOwnerBtn');
+    const unlockBtn = document.getElementById('unlockAdminOwnerBtn');
+    const codeInput = document.getElementById('adminOwnerCodeInput');
+
+    const deleted = isAdminOwnerTierDeleted();
+    const unlocked = isAdminOwnerTierUnlocked();
+
+    if (deleteBtn) {
+        deleteBtn.disabled = deleted || !unlocked;
+    }
+
+    if (unlockBtn) {
+        unlockBtn.disabled = unlocked;
+    }
+
+    if (codeInput) {
+        codeInput.disabled = unlocked;
+    }
+}
+
+function deleteAdminOwnerTier() {
+    const messageEl = document.getElementById('tierUnlockMessage');
+
+    if (!isAdminOwnerTierUnlocked() || isAdminOwnerTierDeleted()) {
+        if (messageEl) {
+            messageEl.textContent = 'Admins & Owners rank is not unlocked, so it cannot be deleted.';
+            messageEl.className = 'settings-message error-message';
+        }
+        syncAdminOwnerControls();
+        return;
+    }
+
+    openConfirmModal('Are you sure you want to delete the Admins & Owners rank? This removes it from the progression and clears its unlock state.', 'Delete Admins & Owners rank', () => {
+        localStorage.setItem(ADMIN_OWNER_DELETED_KEY, 'true');
+        localStorage.removeItem(ADMIN_OWNER_UNLOCKED_KEY);
+
+        if (messageEl) {
+            messageEl.textContent = 'Admins & Owners rank deleted.';
+            messageEl.className = 'settings-message error-message';
+        }
+
+        const codeInput = document.getElementById('adminOwnerCodeInput');
+        if (codeInput) codeInput.value = '';
+
+        syncAdminOwnerControls();
+        renderTierDisplay();
+        renderTierRankDisplay();
+    }, 'Delete rank');
+}
+
+function unlockAdminOwnerTier() {
+    const codeInput = document.getElementById('adminOwnerCodeInput');
+    const messageEl = document.getElementById('tierUnlockMessage');
+    const enteredCode = codeInput ? codeInput.value.trim() : '';
+
+    if (enteredCode === ADMIN_OWNER_UNLOCK_CODE) {
+        localStorage.setItem(ADMIN_OWNER_UNLOCKED_KEY, 'true');
+        localStorage.setItem(ADMIN_OWNER_DELETED_KEY, 'false');
+        if (messageEl) {
+            messageEl.textContent = 'Admins & Owners tier unlocked.';
+            messageEl.className = 'settings-message success-message';
+        }
+        syncAdminOwnerControls();
+        renderTierDisplay();
+        renderTierRankDisplay();
+        return true;
+    }
+
+    if (messageEl) {
+        messageEl.textContent = 'Incorrect code. The Admins & Owners tier is restricted.';
+        messageEl.className = 'settings-message error-message';
+    }
+
+    return false;
+}
+
 function calculatePlayerTier() {
     const demons = getDemons();
     const sessions = getSessions();
@@ -2229,9 +2438,28 @@ function calculatePlayerTier() {
     sessions.forEach(session => {
         totalPracticeTime += session.minutes;
     });
+
+    const metrics = {
+        totalDemonsBeaten,
+        extremeDemonsBeaten,
+        insaneDemonsBeaten,
+        hardDemonsBeaten: grouped['Hard'].length,
+        mediumDemonsBeaten: grouped['Medium'].length,
+        easyDemonsBeaten: grouped['Easy'].length,
+        totalPracticeTime
+    };
+
+    if (isAdminOwnerTierUnlocked()) {
+        return {
+            tier: TIER_DEFINITIONS[0],
+            metrics
+        };
+    }
+
+    const effectiveTiers = getUnlockedTierDefinitions();
     
     // Find the appropriate tier
-    for (let tierDef of TIER_DEFINITIONS) {
+    for (let tierDef of effectiveTiers) {
         const req = tierDef.requirements;
         const meetsRequirements = 
             totalDemonsBeaten >= req.minDemonsBeaten &&
@@ -2242,37 +2470,31 @@ function calculatePlayerTier() {
         if (meetsRequirements) {
             return {
                 tier: tierDef,
-                metrics: {
-                    totalDemonsBeaten,
-                    extremeDemonsBeaten,
-                    insaneDemonsBeaten,
-                    hardDemonsBeaten: grouped['Hard'].length,
-                    mediumDemonsBeaten: grouped['Medium'].length,
-                    easyDemonsBeaten: grouped['Easy'].length,
-                    totalPracticeTime
-                }
+                metrics
             };
         }
     }
     
     // Return Bronze as default
     return {
-        tier: TIER_DEFINITIONS[4], // Bronze
-        metrics: {
-            totalDemonsBeaten,
-            extremeDemonsBeaten,
-            insaneDemonsBeaten,
-            hardDemonsBeaten: grouped['Hard'].length,
-            mediumDemonsBeaten: grouped['Medium'].length,
-            easyDemonsBeaten: grouped['Easy'].length,
-            totalPracticeTime
-        }
+        tier: effectiveTiers[effectiveTiers.length - 1] || TIER_DEFINITIONS[TIER_DEFINITIONS.length - 1],
+        metrics
     };
 }
 
 function getTierProgress() {
     const currentTierInfo = calculatePlayerTier();
-    const currentTierIndex = TIER_DEFINITIONS.findIndex(t => t.name === currentTierInfo.tier.name);
+    const effectiveTiers = getUnlockedTierDefinitions();
+    const currentTierIndex = effectiveTiers.findIndex(t => t.name === currentTierInfo.tier.name);
+
+    if (isAdminOwnerTierUnlocked() && currentTierInfo.tier.name === 'Admins & Owners') {
+        return {
+            currentTier: currentTierInfo.tier,
+            nextTier: null,
+            progressPercent: 100,
+            metricsToNext: null
+        };
+    }
     
     const demons = getDemons();
     const sessions = getSessions();
@@ -2283,7 +2505,7 @@ function getTierProgress() {
         totalPracticeTime += session.minutes;
     });
     
-    // If already at God tier, show completion
+    // If already at the highest unlocked tier, show completion
     if (currentTierIndex === 0) {
         return {
             currentTier: currentTierInfo.tier,
@@ -2295,7 +2517,7 @@ function getTierProgress() {
     
     // Get next tier requirements
     const nextTierIndex = currentTierIndex - 1;
-    const nextTier = TIER_DEFINITIONS[nextTierIndex];
+    const nextTier = effectiveTiers[nextTierIndex];
     const nextReq = nextTier.requirements;
     
     const totalDemonsBeaten = demons.length;
@@ -2358,11 +2580,21 @@ function renderTierDisplay() {
         `;
     }
     
+    const isAdminOwnerUnlocked = isAdminOwnerTierUnlocked();
+    const isAdminOwnerRank = tier.name === 'Admins & Owners';
+    const currentTierLabel = isAdminOwnerRank && isAdminOwnerUnlocked
+        ? 'Admins & Owners Rank'
+        : `${tier.name} Rank`;
+
     tierContainer.innerHTML = `
-        <div class="tier-display" style="border-color: ${tier.color}">
+        <div class="tier-display ${isAdminOwnerRank && isAdminOwnerUnlocked ? 'admin-owner-tier' : ''}" style="border-color: ${tier.color}">
             <div class="tier-header">
                 <div class="tier-icon">${tier.emoji}</div>
-                <div class="tier-name" style="color: ${tier.color}">${tier.name}</div>
+                <div>
+                    <div class="tier-card-title">Current Rank</div>
+                    <div class="tier-name" style="color: ${tier.color}">${currentTierLabel}</div>
+                    ${isAdminOwnerUnlocked && isAdminOwnerRank ? `<div class="tier-current-status"><span aria-hidden="true">✓</span> You are here</div>` : ''}
+                </div>
             </div>
             <div class="tier-description">${tier.description}</div>
             <div class="tier-stats">
@@ -2398,7 +2630,8 @@ function renderTierDisplay() {
             ${nextTierHTML}
         </div>
     `;
-    
+
+    syncAdminOwnerControls();
     renderTierRankDisplay();
 }
 
@@ -2413,17 +2646,22 @@ function renderTierRankDisplay() {
     rankHTML += '<div class="tier-rank-label">Tier Progression:</div>';
     rankHTML += '<div class="tier-rank-progression">';
     
-    // Reverse the tier order so God is on the right
-    const reversedTiers = [...TIER_DEFINITIONS].reverse();
+    const effectiveTiers = getEffectiveTierDefinitions();
+    const reversedTiers = [...effectiveTiers].reverse();
     
     reversedTiers.forEach((tier, index) => {
         const isCurrentTier = tier.name === currentTierName;
+        const isAdminOwner = tier.name === 'Admins & Owners';
+        const isLocked = isAdminOwner && !isAdminOwnerTierUnlocked();
+        const isUnlocked = isAdminOwner && isAdminOwnerTierUnlocked();
         const tierPosition = reversedTiers.length - index;
         
         rankHTML += `
-            <div class="tier-rank-item ${isCurrentTier ? 'active' : ''}" title="${tier.name}: ${tier.description}">
+            <div class="tier-rank-item ${isCurrentTier ? 'active' : ''} ${isLocked ? 'locked' : ''} ${isUnlocked ? 'unlocked-owner-tier' : ''}" title="${tier.name}: ${tier.description}">
                 <div class="rank-icon">${tier.emoji}</div>
                 <div class="rank-name">${tier.name}</div>
+                ${isLocked ? '<div class="rank-badge locked-badge">Locked</div>' : ''}
+                ${isUnlocked ? '<div class="rank-badge unlocked-badge">UNLOCKED</div>' : ''}
                 ${isCurrentTier ? '<div class="rank-badge">✓ YOU ARE HERE</div>' : ''}
             </div>
         `;
