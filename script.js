@@ -16,10 +16,30 @@ const CHAT_MAX_MESSAGE_LENGTH = 4000;
 const ADMIN_OWNER_UNLOCKED_KEY = 'gdAdminOwnerUnlocked';
 const ADMIN_OWNER_DELETED_KEY = 'gdAdminOwnerDeleted';
 const ADMIN_OWNER_UNLOCK_CODE = atob('MTIzNA==');
+const TOP_10_DEMONS_KEY = 'gdTop10Beaten';
 
 let dailyQuests = [];
 let chatMessages = [];
 let chatRequestPending = false;
+
+// ============= CUSTOM ALERT MODAL =============
+
+function openAlertModal(message, title = 'Notice', icon = 'ℹ️') {
+    const modal = document.getElementById('alertModal');
+    const titleEl = document.getElementById('alertModalTitle');
+    const messageEl = document.getElementById('alertModalMessage');
+    const iconEl = document.getElementById('alertModalIcon');
+    if (!modal) return;
+    if (titleEl) titleEl.textContent = title;
+    if (messageEl) messageEl.textContent = message;
+    if (iconEl) iconEl.textContent = icon;
+    modal.classList.add('show');
+}
+
+function closeAlertModal() {
+    const modal = document.getElementById('alertModal');
+    if (modal) modal.classList.remove('show');
+}
 
 function getTodayStr() {
     const d = new Date();
@@ -397,21 +417,32 @@ function purchaseIcon(iconId) {
     if (!icon) return;
 
     const currentCoins = getCoins();
-    const canAfford = currentCoins >= icon.cost;
-    const purchaseMessage = canAfford
-        ? `You have enough coins! ${icon.title} costs ${icon.cost} coins and you have ${currentCoins}.`
-        : `Not enough coins. ${icon.title} costs ${icon.cost}, but you have ${currentCoins}. You need ${icon.cost - currentCoins} more.`;
+    if (currentCoins < icon.cost) {
+        showIconMachineMessage(`Not enough coins. You have ${currentCoins}, but ${icon.title} costs ${icon.cost}.`);
+        return;
+    }
 
     openIconMachineModal({
         title: `Buy ${icon.title}`,
-        message: purchaseMessage,
+        message: `Are you sure you want to buy ${icon.title} for ${icon.cost} coins? You currently have ${currentCoins} coins.`,
         iconId,
         mode: 'buy',
-        submitText: canAfford ? 'Buy' : 'Not Enough Coins'
+        submitText: 'Buy Icon'
     });
+}
 
-    const confirmBtn = document.getElementById('iconMachineModalConfirm');
-    if (confirmBtn) confirmBtn.disabled = !canAfford;
+function sellIcon(iconId) {
+    const icon = getStoreIcon(iconId);
+    if (!icon) return;
+
+    const sellValue = Math.floor(icon.cost / 2);
+    openIconMachineModal({
+        title: `Sell ${icon.title}`,
+        message: `Sell ${icon.title} for ${sellValue} coins? (Half price)`,
+        iconId,
+        mode: 'sell',
+        submitText: 'Sell Icon'
+    });
 }
 
 function renameIcon(iconId) {
@@ -420,61 +451,42 @@ function renameIcon(iconId) {
 
     openIconMachineModal({
         title: `Rename ${icon.title}`,
-        message: 'Enter a new name for this icon.',
+        message: 'Give your icon a custom name below:',
         iconId,
         mode: 'rename',
-        submitText: 'Rename',
+        submitText: 'Save Name',
         showRenameInput: true
     });
 }
 
-function sellIcon(iconId) {
-    const icon = getStoreIcon(iconId);
-    if (!icon) return;
-
-    openIconMachineModal({
-        title: `Sell ${icon.title}`,
-        message: `Sell this icon for ${Math.floor(icon.cost / 2)} coins?`,
-        iconId,
-        mode: 'sell',
-        submitText: 'Sell'
-    });
-}
-
 function handleIconDragStart(event, iconId) {
-    if (!event.dataTransfer) return;
-    event.dataTransfer.setData('text/plain', iconId);
-    event.dataTransfer.effectAllowed = 'move';
+    if (event.dataTransfer) {
+        event.dataTransfer.setData('text/plain', iconId);
+    }
 }
 
 function handleIconDragOver(event) {
     event.preventDefault();
-    const target = event.currentTarget;
-    if (target && target.classList.contains('showcase-dropzone')) {
-        target.classList.add('drag-over');
-    }
+    const dropzone = document.getElementById('showcaseShelf');
+    if (dropzone) dropzone.classList.add('drag-over');
 }
 
 function handleIconDrop(event) {
     event.preventDefault();
-    const target = event.currentTarget;
-    if (target && target.classList.contains('showcase-dropzone')) {
-        target.classList.remove('drag-over');
-    }
+    const dropzone = document.getElementById('showcaseShelf');
+    if (dropzone) dropzone.classList.remove('drag-over');
 
-    const iconId = event.dataTransfer.getData('text/plain');
+    const iconId = event.dataTransfer ? event.dataTransfer.getData('text/plain') : '';
     if (!iconId) return;
 
     const state = getIconMachineState();
-    if (!state.purchased.some(item => item.id === iconId)) {
-        return;
-    }
+    if (!state.purchased.some(item => item.id === iconId)) return;
+    if (state.showcase.includes(iconId)) return;
 
-    if (!state.showcase.includes(iconId)) {
-        state.showcase.push(iconId);
-        saveIconMachineState(state);
-        renderShowcaseShelf();
-    }
+    state.showcase.push(iconId);
+    saveIconMachineState(state);
+    renderShowcaseShelf();
+    showIconMachineMessage('Added icon to your showcase!');
 }
 
 function removeFromShowcase(iconId) {
@@ -482,561 +494,89 @@ function removeFromShowcase(iconId) {
     state.showcase = state.showcase.filter(id => id !== iconId);
     saveIconMachineState(state);
     renderShowcaseShelf();
+    showIconMachineMessage('Removed icon from showcase.');
 }
 
-// Weakness types
-const WEAKNESS_TYPES = [
-    { name: 'Wave', emoji: '〰️' },
-    { name: 'Ship', emoji: '🚀' },
-    { name: 'Ball', emoji: '⚽' },
-    { name: 'UFO', emoji: '🛸' },
-    { name: 'Robot', emoji: '🤖' },
-    { name: 'Spider', emoji: '🕷️' },
-    { name: 'Timing', emoji: '⏱️' },
-    { name: 'Jumps', emoji: '📍' },
-    { name: 'Duals', emoji: '👥' },
-    { name: 'Speed', emoji: '⚡' }
-];
+// Confirmation Modal Helpers
+let confirmModalCallback = null;
 
-// Temporary demon data for modal
-let tempDemonData = {};
-let timelineFilter = 'all';
-let editingDemonId = null;
-
-function getStoredData(key, fallback = []) {
-    const data = localStorage.getItem(key);
-    return data !== null ? JSON.parse(data) : fallback;
-}
-
-function saveStoredData(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-}
-
-function getUsername() {
-    return localStorage.getItem(USERNAME_KEY) || DEFAULT_USERNAME;
-}
-
-function loadChatHistory() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || '[]');
-        chatMessages = Array.isArray(saved)
-            ? saved.filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-                .slice(-CHAT_MAX_MESSAGES)
-            : [];
-    } catch (error) {
-        chatMessages = [];
-    }
-    renderChatMessages();
-}
-
-function saveChatHistory() {
-    chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
-    try {
-        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatMessages));
-    } catch (error) {
-        showChatError('Chat history could not be saved in this browser.');
-    }
-}
-
-function showChatError(message = '') {
-    const errorEl = document.getElementById('chatError');
-    if (errorEl) errorEl.textContent = message;
-}
-
-function appendInlineMarkdown(parent, text) {
-    const tokenPattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\[[^\]\n]+\]\([^\s)]+\)|\*[^*\n]+\*|_[^_\n]+_)/g;
-    let lastIndex = 0;
-
-    for (const match of text.matchAll(tokenPattern)) {
-        if (match.index > lastIndex) parent.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
-        const token = match[0];
-
-        if (token.startsWith('`')) {
-            const code = document.createElement('code');
-            code.textContent = token.slice(1, -1);
-            parent.appendChild(code);
-        } else if (token.startsWith('**') || token.startsWith('__')) {
-            const strong = document.createElement('strong');
-            strong.textContent = token.slice(2, -2);
-            parent.appendChild(strong);
-        } else if (token.startsWith('[')) {
-            const parts = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-            let safeUrl = null;
-            try {
-                const parsedUrl = new URL(parts[2], window.location.href);
-                if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') safeUrl = parsedUrl.href;
-            } catch (error) {
-                // Invalid links are displayed as plain text.
-            }
-            if (safeUrl) {
-                const link = document.createElement('a');
-                link.textContent = parts[1];
-                link.href = safeUrl;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                parent.appendChild(link);
-            } else {
-                parent.appendChild(document.createTextNode(parts[1]));
-            }
-        } else {
-            const emphasis = document.createElement('em');
-            emphasis.textContent = token.slice(1, -1);
-            parent.appendChild(emphasis);
-        }
-        lastIndex = match.index + token.length;
-    }
-
-    if (lastIndex < text.length) parent.appendChild(document.createTextNode(text.slice(lastIndex)));
-}
-
-function renderMarkdown(container, markdown) {
-    const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
-    let index = 0;
-
-    const startsBlock = line => /^\s*(```|#{1,6}\s|>|[-*+]\s|\d+[.)]\s|---+\s*$)/.test(line);
-    while (index < lines.length) {
-        const line = lines[index];
-        if (!line.trim()) {
-            index += 1;
-            continue;
-        }
-
-        const fence = line.match(/^\s*```([\w+-]*)\s*$/);
-        if (fence) {
-            const codeLines = [];
-            index += 1;
-            while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) {
-                codeLines.push(lines[index]);
-                index += 1;
-            }
-            if (index < lines.length) index += 1;
-            const pre = document.createElement('pre');
-            const code = document.createElement('code');
-            if (fence[1]) code.dataset.language = fence[1];
-            code.textContent = codeLines.join('\n');
-            pre.appendChild(code);
-            container.appendChild(pre);
-            continue;
-        }
-
-        const heading = line.match(/^\s*(#{1,6})\s+(.+)$/);
-        if (heading) {
-            const element = document.createElement(`h${heading[1].length}`);
-            appendInlineMarkdown(element, heading[2].replace(/\s+#+\s*$/, ''));
-            container.appendChild(element);
-            index += 1;
-            continue;
-        }
-
-        if (/^\s*---+\s*$/.test(line)) {
-            container.appendChild(document.createElement('hr'));
-            index += 1;
-            continue;
-        }
-
-        if (/^\s*>/.test(line)) {
-            const quote = document.createElement('blockquote');
-            const quoteLines = [];
-            while (index < lines.length && /^\s*>/.test(lines[index])) {
-                quoteLines.push(lines[index].replace(/^\s*>\s?/, ''));
-                index += 1;
-            }
-            appendInlineMarkdown(quote, quoteLines.join('\n'));
-            container.appendChild(quote);
-            continue;
-        }
-
-        const listMatch = line.match(/^\s*([-*+]|\d+[.)])\s+(.+)$/);
-        if (listMatch) {
-            const ordered = /^\d/.test(listMatch[1]);
-            const list = document.createElement(ordered ? 'ol' : 'ul');
-            while (index < lines.length) {
-                const itemMatch = lines[index].match(/^\s*([-*+]|\d+[.)])\s+(.+)$/);
-                if (!itemMatch || /^\d/.test(itemMatch[1]) !== ordered) break;
-                const item = document.createElement('li');
-                appendInlineMarkdown(item, itemMatch[2]);
-                list.appendChild(item);
-                index += 1;
-            }
-            container.appendChild(list);
-            continue;
-        }
-
-        const paragraphLines = [line.trim()];
-        index += 1;
-        while (index < lines.length && lines[index].trim() && !startsBlock(lines[index])) {
-            paragraphLines.push(lines[index].trim());
-            index += 1;
-        }
-        const paragraph = document.createElement('p');
-        appendInlineMarkdown(paragraph, paragraphLines.join(' '));
-        container.appendChild(paragraph);
-    }
-}
-
-function renderChatMessages() {
-    const container = document.getElementById('chatMessages');
-    if (!container) return;
-    container.replaceChildren();
-
-    if (chatMessages.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'chat-empty';
-        empty.textContent = 'Start a conversation by asking a question below.';
-        container.appendChild(empty);
-    } else {
-        chatMessages.forEach(message => {
-            const row = document.createElement('div');
-            row.className = `chat-message ${message.role}`;
-
-            const label = document.createElement('div');
-            label.className = 'chat-message-label';
-            label.textContent = message.role === 'user' ? 'You' : 'The GD Chatbot';
-
-            const content = document.createElement('div');
-            content.className = 'chat-message-content';
-            if (message.role === 'assistant') renderMarkdown(content, message.content);
-            else content.textContent = message.content;
-
-            row.append(label, content);
-            container.appendChild(row);
-        });
-    }
-
-    if (chatRequestPending) {
-        const loading = document.createElement('div');
-        loading.className = 'chat-message assistant chat-loading';
-        loading.textContent = 'Assistant is thinking…';
-        container.appendChild(loading);
-    }
-    container.scrollTop = container.scrollHeight;
-}
-
-function setChatPending(pending) {
-    chatRequestPending = pending;
-    const input = document.getElementById('chatInput');
-    const sendButton = document.getElementById('sendChatBtn');
-    const clearButton = document.getElementById('clearChatBtn');
-    if (input) input.disabled = pending;
-    if (sendButton) {
-        sendButton.disabled = pending;
-        sendButton.textContent = pending ? 'Sending…' : 'Send';
-    }
-    if (clearButton) clearButton.disabled = pending;
-    renderChatMessages();
-}
-
-async function sendChatMessage() {
-    if (chatRequestPending) return;
-    const input = document.getElementById('chatInput');
-    const content = (input?.value || '').trim();
-    if (!content) {
-        showChatError('Enter a message first.');
-        input?.focus();
-        return;
-    }
-    if (content.length > CHAT_MAX_MESSAGE_LENGTH) {
-        showChatError(`Messages can contain up to ${CHAT_MAX_MESSAGE_LENGTH} characters.`);
-        return;
-    }
-
-    showChatError();
-    chatMessages.push({ role: 'user', content });
-    chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
-    saveChatHistory();
-    if (input) input.value = '';
-    setChatPending(true);
-
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: chatMessages })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'The chatbot could not respond.');
-        if (typeof result.reply !== 'string' || !result.reply.trim()) throw new Error('The chatbot returned an empty response.');
-
-        chatMessages.push({ role: 'assistant', content: result.reply.trim() });
-        saveChatHistory();
-    } catch (error) {
-        chatMessages.pop();
-        saveChatHistory();
-        if (input) input.value = content;
-        showChatError(error.message || 'The chatbot could not respond. Please try again.');
-    } finally {
-        setChatPending(false);
-        input?.focus();
-    }
-}
-
-function openConfirmModal(message, title = 'Confirm Action', onConfirm = null, confirmText = 'Confirm') {
+function openConfirmModal(message, title, callback, confirmText = 'Confirm') {
     const modal = document.getElementById('confirmModal');
     const titleEl = document.getElementById('confirmModalTitle');
     const messageEl = document.getElementById('confirmModalMessage');
     const confirmBtn = document.getElementById('confirmModalConfirm');
-    const cancelBtn = document.getElementById('confirmModalCancel');
 
-    if (!modal || !titleEl || !messageEl || !confirmBtn || !cancelBtn) return;
+    if (!modal || !titleEl || !messageEl || !confirmBtn) return;
 
-    titleEl.textContent = title;
+    titleEl.textContent = title || 'Confirm Action';
     messageEl.textContent = message;
     confirmBtn.textContent = confirmText;
-    confirmBtn.className = 'btn btn-danger';
+    confirmModalCallback = callback;
 
-    window.__confirmAction = onConfirm || null;
     modal.classList.add('show');
 }
 
 function closeConfirmModal() {
     const modal = document.getElementById('confirmModal');
     if (modal) modal.classList.remove('show');
-    window.__confirmAction = null;
+    confirmModalCallback = null;
 }
 
 function commitConfirmModal() {
-    const action = window.__confirmAction;
+    if (typeof confirmModalCallback === 'function') {
+        confirmModalCallback();
+    }
     closeConfirmModal();
-    if (typeof action === 'function') {
-        action();
-    }
 }
 
-function clearChat() {
-    if (chatRequestPending || chatMessages.length === 0) return;
-    openConfirmModal('Clear the entire chat history?', 'Clear chat history', () => {
-        chatMessages = [];
-        localStorage.removeItem(CHAT_HISTORY_KEY);
-        showChatError();
-        renderChatMessages();
-        document.getElementById('chatInput')?.focus();
-    }, 'Clear');
-}
-
-function getPlayerId() {
-    let playerId = localStorage.getItem(PLAYER_ID_KEY);
-    if (!playerId) {
-        playerId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-        localStorage.setItem(PLAYER_ID_KEY, playerId);
-    }
-    return playerId;
-}
-
-async function syncProfileToServer() {
+// Helper functions for localStorage management
+function getStoredData(key, defaultValue) {
+    const data = localStorage.getItem(key);
+    if (!data) return defaultValue;
     try {
-        const response = await fetch('/api/profiles', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                playerId: getPlayerId(),
-                username: getUsername(),
-                pfpImage: getPfpImage()
-            })
-        });
-        if (!response.ok) throw new Error('Profile save failed.');
-        return true;
-    } catch (error) {
-        return false;
+        return JSON.parse(data);
+    } catch {
+        return defaultValue;
     }
 }
 
-async function loadProfileFromServer() {
-    try {
-        const response = await fetch(`/api/profiles/${encodeURIComponent(getPlayerId())}`);
-        if (response.status === 404) {
-            await syncProfileToServer();
-            return;
-        }
-        if (!response.ok) return;
-        const profile = await response.json();
-        if (profile.username) localStorage.setItem(USERNAME_KEY, profile.username);
-        if (profile.pfpImage) localStorage.setItem(PFP_IMAGE_KEY, profile.pfpImage);
-        else localStorage.removeItem(PFP_IMAGE_KEY);
-
-        const input = document.getElementById('usernameInput');
-        if (input) input.value = getUsername();
-        updateWelcomeMessage();
-        renderPfpPreview();
-    } catch (error) {
-        // The local copy remains usable when the server is unavailable.
-    }
+function saveStoredData(key, value) {
+    localStorage.setItem(key, JSON.stringify(value));
 }
 
-async function saveUsername() {
-    const input = document.getElementById('usernameInput');
-    const username = (input ? input.value : '').trim() || DEFAULT_USERNAME;
-    try {
-        localStorage.setItem(USERNAME_KEY, username);
-    } catch (error) {
-        showSettingsMessage('Could not save your username. Check that browser storage is enabled.');
-        return;
-    }
-    if (input) input.value = username;
-    updateWelcomeMessage();
-    const savedOnline = await syncProfileToServer();
-    showSettingsMessage(savedOnline
-        ? `Username saved as ${username}.`
-        : `Username saved on this device. Start the live server to save it for everyone.`);
-}
-
-function persistUsernameDraft(event) {
-    const username = event.target.value.trim();
-    try {
-        if (username) {
-            localStorage.setItem(USERNAME_KEY, username);
-        } else {
-            localStorage.removeItem(USERNAME_KEY);
-        }
-        updateWelcomeMessage();
-    } catch (error) {
-        showSettingsMessage('Could not save your username. Check that browser storage is enabled.');
-    }
-}
-
-function showSettingsMessage(message) {
-    const msg = document.getElementById('settingsMessage');
-    if (msg) {
-        msg.textContent = message;
-    }
-}
-
-function updateWelcomeMessage() {
-    const el = document.getElementById('welcomeMessage');
-    if (el) {
-        const username = getUsername();
-        el.textContent = username === DEFAULT_USERNAME ? `Welcome, ${DEFAULT_USERNAME}` : `Welcome, ${username}`;
-    }
-}
-
-function applyTheme(isDark) {
-    document.body.classList.toggle('dark-mode', isDark);
-    localStorage.setItem(DARK_MODE_KEY, String(isDark));
-
-    const toggle = document.getElementById('darkModeToggle');
-    if (toggle) {
-        toggle.checked = isDark;
-    }
-}
-
-function toggleDarkMode(isDark) {
-    applyTheme(isDark);
-    showSettingsMessage(isDark ? 'Dark mode enabled.' : 'Dark mode disabled.');
-}
-
-function getDarkModeSetting() {
-    return localStorage.getItem(DARK_MODE_KEY) === 'true';
-}
-
-function getPfpImage() {
-    return localStorage.getItem(PFP_IMAGE_KEY) || '';
-}
-
-function savePfpImage(dataUrl) {
-    try {
-        localStorage.setItem(PFP_IMAGE_KEY, dataUrl);
-        syncProfileToServer();
-        return true;
-    } catch (error) {
-        showSettingsMessage('That picture could not be saved. Try a smaller image.');
-        return false;
-    }
-}
-
-function renderPfpPreview() {
-    const headerAvatar = document.getElementById('headerAvatar');
-    const settingsPreview = document.getElementById('settingsAvatarPreview');
-    const imageData = getPfpImage();
-
-    const avatarMarkup = imageData
-        ? `<img src="${imageData}" alt="Profile picture">`
-        : '<span class="avatar-fallback">🧑</span>';
-
-    if (headerAvatar) {
-        headerAvatar.innerHTML = avatarMarkup;
-    }
-
-    if (settingsPreview) {
-        settingsPreview.innerHTML = avatarMarkup;
-    }
-}
-
-function handlePfpUpload(event) {
-    const file = event.target.files && event.target.files[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-        showSettingsMessage('Please choose an image file.');
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-        const image = new Image();
-        image.onload = function () {
-            const maxSize = 512;
-            const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.max(1, Math.round(image.width * scale));
-            canvas.height = Math.max(1, Math.round(image.height * scale));
-
-            const context = canvas.getContext('2d');
-            context.drawImage(image, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-            if (savePfpImage(dataUrl)) {
-                renderPfpPreview();
-                showSettingsMessage('Profile picture saved.');
-            }
-        };
-        image.onerror = function () {
-            showSettingsMessage('That image could not be loaded.');
-        };
-        image.src = e.target.result;
-    };
-    reader.onerror = function () {
-        showSettingsMessage('That image could not be read.');
-    };
-    reader.readAsDataURL(file);
-}
-
-function clearPfpImage() {
-    localStorage.removeItem(PFP_IMAGE_KEY);
-    syncProfileToServer();
-    renderPfpPreview();
-    showSettingsMessage('Profile picture removed.');
-}
-
+// Date helpers for demons
 function getDefaultDemonDate() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return new Date().toISOString().split('T')[0];
 }
 
-function formatDemonDate(dateValue) {
-    if (!dateValue) return 'Not set';
-    const date = new Date(dateValue);
-    return isNaN(date.getTime()) ? dateValue : date.toLocaleDateString();
+function getDemonDateInputValue(dateStr) {
+    if (!dateStr) return getDefaultDemonDate();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString().split('T')[0];
+    return getDefaultDemonDate();
 }
 
-function getDemonDateInputValue(dateValue) {
-    if (!dateValue) return getDefaultDemonDate();
-    const date = new Date(dateValue);
-    if (isNaN(date.getTime())) {
-        return dateValue;
+function formatDemonDate(dateStr) {
+    if (!dateStr) return 'Unknown Date';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [year, month, day] = dateStr.split('-');
+        return new Date(year, month - 1, day).toLocaleDateString();
     }
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    const parsed = new Date(dateStr);
+    return isNaN(parsed.getTime()) ? dateStr : parsed.toLocaleDateString();
 }
 
-// Initialize the app when page loads
+// State tracking
+let editingDemonId = null;
+let tempDemonData = {};
+let timelineFilter = 'all';
+
+// Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    updateWelcomeMessage();
-    applyTheme(getDarkModeSetting());
-    renderPfpPreview();
+    initDarkMode();
+    ensurePlayerId();
+
     const usernameInput = document.getElementById('usernameInput');
     if (usernameInput) {
         usernameInput.value = getUsername();
@@ -1051,6 +591,9 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAllStats();
     loadIconMachine();
     loadChatHistory();
+    loadYouTubers();
+    loadDemonList();
+    updateSettingsBackupStats();
 
     // Allow Enter key to add items (guarded)
     const goalInputEl = document.getElementById('goalInput');
@@ -1114,6 +657,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const alertModalEl = document.getElementById('alertModal');
+    if (alertModalEl) {
+        alertModalEl.addEventListener('click', (e) => {
+            if (e.target.id === 'alertModal') closeAlertModal();
+        });
+    }
+
     // Initialize weakness buttons
     initWeaknessButtons();
 
@@ -1143,6 +693,61 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============= PAGE SWITCHING =============
+
+function switchPage(pageName) {
+    // Hide all pages
+    const pages = document.querySelectorAll('.page');
+    pages.forEach(page => page.classList.remove('active'));
+
+    // Show selected page
+    const selectedPage = document.getElementById(pageName + '-page');
+    if (selectedPage) {
+        selectedPage.classList.add('active');
+    }
+
+    // Update nav buttons
+    const navBtns = document.querySelectorAll('.nav-btn');
+    navBtns.forEach(btn => btn.classList.remove('active'));
+    // Try to find the nav button that triggered this action (fallback to onclick attribute match)
+    const activeBtn = document.querySelector(`.nav-btn[onclick*="switchPage('${pageName}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    // Update stats when switching to dashboard
+    if (pageName === 'dashboard') {
+        updateAllStats();
+        loadRecentActivity();
+    }
+
+    // Update timeline when switching to timeline page
+    if (pageName === 'timeline') {
+        loadTimeline();
+    }
+
+    // Update stats page when switching
+    if (pageName === 'stats') {
+        updateDetailedStats();
+    }
+
+    // Update tier display when switching to tiers page
+    if (pageName === 'tiers') {
+        renderTierDisplay();
+    }
+
+    // Update YouTubers page when switching
+    if (pageName === 'youtubers') {
+        loadYouTubers();
+    }
+
+    // Update Demon List page when switching
+    if (pageName === 'demonlist') {
+        loadDemonList();
+    }
+
+    // Update Settings page backup stats when switching
+    if (pageName === 'settings') {
+        updateSettingsBackupStats();
+    }
+}
 
 // ============= DAILY QUESTS =============
 
@@ -1221,7 +826,6 @@ function renderDailyQuests() {
     dailyQuests.forEach(q => {
         const li = document.createElement('div');
         li.className = 'goal-item quest-item';
-        // Complete button shows a simple square; disable if already claimed
         const completeLabel = q.completed ? '⬛' : '⬜';
         const completeDisabled = q.claimed ? 'disabled' : '';
         const claimDisabled = (q.completed && !q.claimed) ? '' : 'disabled';
@@ -1242,13 +846,11 @@ function renderDailyQuests() {
 function toggleCompleteQuest(id) {
     const q = dailyQuests.find(x => x.id === id);
     if (!q) return;
-    // If already claimed, do not allow toggling completion
     if (q.claimed) {
         showDailyQuestMessage('This quest has already been claimed.');
         return;
     }
     q.completed = !q.completed;
-    // If user unchecks, ensure claimed is false (defensive)
     if (!q.completed) q.claimed = false;
     saveDailyQuests();
     renderDailyQuests();
@@ -1258,11 +860,10 @@ function claimQuest(id) {
     const q = dailyQuests.find(x => x.id === id);
     if (!q) return;
     if (!q.completed) {
-        alert('Complete the quest before claiming the reward.');
+        openAlertModal('Complete the quest before claiming the reward.', 'Quest Incomplete', '🎁');
         return;
     }
     if (q.claimed) return;
-    // Grant coins as reward
     addCoins(q.reward || 0);
     q.claimed = true;
     saveDailyQuests();
@@ -1274,7 +875,7 @@ function claimQuest(id) {
 function refreshDailyQuests() {
     if (!canRefreshNow()) {
         const rem = getRemainingCooldownMs();
-        alert(`Please wait ${formatMsToMMSS(rem)} before refreshing quests.`);
+        openAlertModal(`Please wait ${formatMsToMMSS(rem)} before refreshing quests.`, 'Refresh Cooldown', '⏳');
         return;
     }
 
@@ -1293,47 +894,6 @@ function updateQuestStats() {
     updateCoinStat();
 }
 
-
-function switchPage(pageName) {
-    // Hide all pages
-    const pages = document.querySelectorAll('.page');
-    pages.forEach(page => page.classList.remove('active'));
-
-    // Show selected page
-    const selectedPage = document.getElementById(pageName + '-page');
-    if (selectedPage) {
-        selectedPage.classList.add('active');
-    }
-
-    // Update nav buttons
-    const navBtns = document.querySelectorAll('.nav-btn');
-    navBtns.forEach(btn => btn.classList.remove('active'));
-    // Try to find the nav button that triggered this action (fallback to onclick attribute match)
-    const activeBtn = document.querySelector(`.nav-btn[onclick*="switchPage('${pageName}')"]`);
-    if (activeBtn) activeBtn.classList.add('active');
-
-    // Update stats when switching to dashboard
-    if (pageName === 'dashboard') {
-        updateAllStats();
-        loadRecentActivity();
-    }
-
-    // Update timeline when switching to timeline page
-    if (pageName === 'timeline') {
-        loadTimeline();
-    }
-
-    // Update stats page when switching
-    if (pageName === 'stats') {
-        updateDetailedStats();
-    }
-
-    // Update tier display when switching to tiers page
-    if (pageName === 'tiers') {
-        renderTierDisplay();
-    }
-}
-
 // ============= GOALS MANAGEMENT =============
 
 function addGoal() {
@@ -1341,7 +901,7 @@ function addGoal() {
     const goal = input.value.trim();
 
     if (!goal) {
-        alert('Please enter a goal!');
+        openAlertModal('Please enter a goal!', 'Missing Goal', '📋');
         return;
     }
 
@@ -1356,6 +916,7 @@ function addGoal() {
     input.value = '';
     loadGoals();
     updateStats();
+    updateSettingsBackupStats();
 }
 
 function deleteGoal(id) {
@@ -1364,6 +925,7 @@ function deleteGoal(id) {
     saveGoals(goals);
     loadGoals();
     updateStats();
+    updateSettingsBackupStats();
 }
 
 function getGoals() {
@@ -1405,6 +967,7 @@ function clearGoals() {
         saveGoals([]);
         loadGoals();
         updateStats();
+        updateSettingsBackupStats();
     }, 'Delete');
 }
 
@@ -1415,7 +978,7 @@ function showDemonModal() {
     const demon = demonInput.value.trim();
 
     if (!demon) {
-        alert('Please enter a demon name!');
+        openAlertModal('Please enter a demon name!', 'Missing Demon Name', '👹');
         return;
     }
 
@@ -1468,7 +1031,6 @@ function confirmAddDemon() {
     const dateBeaten = document.getElementById('demonDateEdit').value || getDefaultDemonDate();
 
     if (editingDemonId !== null) {
-        // Update existing demon
         const demons = getDemons();
         const demon = demons.find(d => d.id === editingDemonId);
         if (demon) {
@@ -1480,7 +1042,6 @@ function confirmAddDemon() {
         }
         saveDemons(demons);
     } else {
-        // Add new demon
         const demons = getDemons();
         demons.push({
             id: Date.now(),
@@ -1501,6 +1062,7 @@ function confirmAddDemon() {
     closeDemonModal();
     loadDemons();
     updateAllStats();
+    updateSettingsBackupStats();
 }
 
 function editDemon(id) {
@@ -1529,6 +1091,7 @@ function deleteDemon(id) {
     saveDemons(demons);
     loadDemons();
     updateAllStats();
+    updateSettingsBackupStats();
 }
 
 function getDemons() {
@@ -1565,7 +1128,6 @@ function loadDemons() {
     } else if (filteredDemons.length === 0) {
         demonsList.innerHTML = '<div class="empty-message">No demons match your search. Try a different name or difficulty.</div>';
     } else {
-        // Group demons by difficulty
         const grouped = groupDemonsByDifficulty(filteredDemons);
         const difficultyOrder = ['Easy', 'Medium', 'Hard', 'Insane', 'Extreme'];
 
@@ -1587,7 +1149,6 @@ function loadDemons() {
                     if (demon.attempts || demon.notes || demon.personalRecord || (demon.percentage !== undefined && demon.percentage !== 100)) {
                         detailsHtml = '<div class="demon-details">';
                         
-                        // Show progress bar if percentage is less than 100
                         if (demon.percentage !== undefined && demon.percentage !== 100) {
                             detailsHtml += `
                                 <div class="detail-item">
@@ -1634,6 +1195,7 @@ function clearDemons() {
         saveDemons([]);
         loadDemons();
         updateAllStats();
+        updateSettingsBackupStats();
     }, 'Delete');
 }
 
@@ -1677,7 +1239,7 @@ function addPracticeSession() {
     const notes = notesInput.value.trim();
 
     if (isNaN(minutes) || minutes < 1) {
-        alert('Please enter valid minutes');
+        openAlertModal('Please enter valid minutes for your practice session.', 'Invalid Practice Minutes', '🏋️');
         return;
     }
 
@@ -1697,6 +1259,7 @@ function addPracticeSession() {
     notesInput.value = '';
     loadSessions();
     updateAllStats();
+    updateSettingsBackupStats();
 }
 
 function deletePracticeSession(id) {
@@ -1705,6 +1268,7 @@ function deletePracticeSession(id) {
     saveSessions(sessions);
     loadSessions();
     updateAllStats();
+    updateSettingsBackupStats();
 }
 
 function getSessions() {
@@ -1724,7 +1288,6 @@ function loadSessions() {
     if (sessions.length === 0) {
         sessionsList.innerHTML = '<div class="empty-message">No practice sessions logged yet. Start your first session!</div>';
     } else {
-        // Sort by most recent
         const sorted = [...sessions].sort((a, b) => b.id - a.id);
 
         sorted.forEach(session => {
@@ -1754,13 +1317,30 @@ function clearSessions() {
         saveSessions([]);
         loadSessions();
         updateAllStats();
+        updateSettingsBackupStats();
     }, 'Delete');
 }
 
 // ============= WEAKNESS TRACKER =============
 
+const WEAKNESS_TYPES = [
+    { name: 'Wave', emoji: '🌊' },
+    { name: 'Ship', emoji: '🚀' },
+    { name: 'Ball', emoji: '⚽' },
+    { name: 'UFO', emoji: '🛸' },
+    { name: 'Spider', emoji: '🕷️' },
+    { name: 'Robot', emoji: '🤖' },
+    { name: 'Swing', emoji: '🔄' },
+    { name: 'Memory', emoji: '🧠' },
+    { name: 'Dual', emoji: '👥' },
+    { name: 'Nerve Control', emoji: '💓' },
+    { name: 'Stamina', emoji: '🔋' },
+    { name: 'Timing', emoji: '⏱️' }
+];
+
 function initWeaknessButtons() {
     const grid = document.getElementById('weaknessGrid');
+    if (!grid) return;
     grid.innerHTML = '';
 
     const weaknesses = getWeaknesses();
@@ -1793,6 +1373,7 @@ function changeWeakness(weaknessType, delta) {
     saveWeaknesses(weaknesses);
     initWeaknessButtons();
     updateWeaknessStats();
+    updateSettingsBackupStats();
 }
 
 function getWeaknesses() {
@@ -1812,6 +1393,7 @@ function loadWeaknesses() {
 function loadTimeline() {
     const demons = getDemons();
     const timeline = document.getElementById('timeline');
+    if (!timeline) return;
 
     timeline.innerHTML = '';
 
@@ -1820,14 +1402,12 @@ function loadTimeline() {
         return;
     }
 
-    // Sort by date beaten (most recent first)
     const sorted = [...demons].sort((a, b) => {
         const dateA = new Date(a.dateBeaten);
         const dateB = new Date(b.dateBeaten);
         return dateB - dateA;
     });
 
-    // Filter by difficulty if needed
     let filtered = sorted;
     if (timelineFilter !== 'all') {
         filtered = sorted.filter(d => d.difficulty.toLowerCase() === timelineFilter);
@@ -1867,9 +1447,7 @@ function loadTimeline() {
 
 function updateQuickStats() {
     const demons = getDemons();
-    const weaknesses = getWeaknesses();
 
-    // Demon streak
     const sorted = [...demons].sort((a, b) => {
         const dateA = new Date(a.dateBeaten);
         const dateB = new Date(b.dateBeaten);
@@ -1878,12 +1456,11 @@ function updateQuickStats() {
 
     let streak = 0;
     if (sorted.length > 0) {
-        const today = new Date();
         let currentDate = new Date(sorted[0].dateBeaten);
 
         for (let demon of sorted) {
             const demonDate = new Date(demon.dateBeaten);
-            if (Math.abs(currentDate - demonDate) <= 86400000) { // 1 day in ms
+            if (Math.abs(currentDate - demonDate) <= 86400000) {
                 streak++;
                 currentDate = new Date(demonDate.getTime() - 86400000);
             } else {
@@ -1892,13 +1469,11 @@ function updateQuickStats() {
         }
     }
 
-    // Recently beaten
     let recentlyBeaten = '-';
     if (sorted.length > 0) {
         recentlyBeaten = sorted[0].name.substring(0, 15) + (sorted[0].name.length > 15 ? '...' : '');
     }
 
-    // Hardest demon (most attempts)
     let hardestDemon = '-';
     let maxAttempts = 0;
     demons.forEach(d => {
@@ -1908,13 +1483,17 @@ function updateQuickStats() {
         }
     });
 
-    // Most attempts value
     const mostAttempts = maxAttempts > 0 ? maxAttempts : 0;
 
-    document.getElementById('demonStreak').textContent = streak;
-    document.getElementById('recentlyBeaten').textContent = recentlyBeaten;
-    document.getElementById('hardestDemon').textContent = hardestDemon;
-    document.getElementById('mostAttempts').textContent = mostAttempts;
+    const streakEl = document.getElementById('demonStreak');
+    const recentEl = document.getElementById('recentlyBeaten');
+    const hardestEl = document.getElementById('hardestDemon');
+    const attemptsEl = document.getElementById('mostAttempts');
+
+    if (streakEl) streakEl.textContent = streak;
+    if (recentEl) recentEl.textContent = recentlyBeaten;
+    if (hardestEl) hardestEl.textContent = hardestDemon;
+    if (attemptsEl) attemptsEl.textContent = mostAttempts;
 }
 
 // ============= STATISTICS =============
@@ -1924,13 +1503,21 @@ function updateStats() {
     const demons = getDemons();
     const grouped = groupDemonsByDifficulty(demons);
 
-    document.getElementById('totalGoals').textContent = goals.length;
-    document.getElementById('totalDemons').textContent = demons.length;
-    document.getElementById('easyCount').textContent = grouped['Easy'].length;
-    document.getElementById('mediumCount').textContent = grouped['Medium'].length;
-    document.getElementById('hardCount').textContent = grouped['Hard'].length;
-    document.getElementById('insaneCount').textContent = grouped['Insane'].length;
-    document.getElementById('extremeCount').textContent = grouped['Extreme'].length;
+    const goalsEl = document.getElementById('totalGoals');
+    const demonsEl = document.getElementById('totalDemons');
+    const easyEl = document.getElementById('easyCount');
+    const mediumEl = document.getElementById('mediumCount');
+    const hardEl = document.getElementById('hardCount');
+    const insaneEl = document.getElementById('insaneCount');
+    const extremeEl = document.getElementById('extremeCount');
+
+    if (goalsEl) goalsEl.textContent = goals.length;
+    if (demonsEl) demonsEl.textContent = demons.length;
+    if (easyEl) easyEl.textContent = grouped['Easy'].length;
+    if (mediumEl) mediumEl.textContent = grouped['Medium'].length;
+    if (hardEl) hardEl.textContent = grouped['Hard'].length;
+    if (insaneEl) insaneEl.textContent = grouped['Insane'].length;
+    if (extremeEl) extremeEl.textContent = grouped['Extreme'].length;
 }
 
 function updateAllStats() {
@@ -1950,7 +1537,6 @@ function loadRecentActivity() {
     
     const activities = [];
     
-    // Add recent goals
     goals.slice(-3).forEach(goal => {
         activities.push({
             type: 'goal',
@@ -1960,7 +1546,6 @@ function loadRecentActivity() {
         });
     });
     
-    // Add recent demons
     demons.slice(-3).forEach(demon => {
         activities.push({
             type: 'demon',
@@ -1970,7 +1555,6 @@ function loadRecentActivity() {
         });
     });
     
-    // Add recent sessions
     sessions.slice(-3).forEach(session => {
         const levelName = session.levelName ? ` on ${session.levelName}` : '';
         activities.push({
@@ -1981,10 +1565,10 @@ function loadRecentActivity() {
         });
     });
     
-    // Sort by date descending
     activities.sort((a, b) => b.date - a.date);
     
     const activityList = document.getElementById('recentActivity');
+    if (!activityList) return;
     activityList.innerHTML = '';
     
     if (activities.length === 0) {
@@ -2007,7 +1591,6 @@ function loadRecentActivity() {
 function filterTimeline(difficulty) {
     timelineFilter = difficulty;
     
-    // Update active filter button
     const filterBtns = document.querySelectorAll('.timeline-filter');
     filterBtns.forEach(btn => btn.classList.remove('active'));
     const activeFilterBtn = document.querySelector(`.timeline-filter[onclick*="filterTimeline('${difficulty}')"]`);
@@ -2025,25 +1608,36 @@ function updateDetailedStats() {
     const grouped = groupDemonsByDifficulty(demons);
     const weaknesses = getWeaknesses();
     
-    // Update stat cards
-    document.getElementById('statsGoals').textContent = goals.length;
-    document.getElementById('statsDemons').textContent = demons.length;
-    document.getElementById('statsEasy').textContent = grouped['Easy'].length;
-    document.getElementById('statsMedium').textContent = grouped['Medium'].length;
-    document.getElementById('statsHard').textContent = grouped['Hard'].length;
-    document.getElementById('statsInsane').textContent = grouped['Insane'].length;
-    document.getElementById('statsExtreme').textContent = grouped['Extreme'].length;
+    const goalsEl = document.getElementById('statsGoals');
+    if (goalsEl) goalsEl.textContent = goals.length;
     
-    // Total practice time
+    const demonsEl = document.getElementById('statsDemons');
+    if (demonsEl) demonsEl.textContent = demons.length;
+    
+    const easyEl = document.getElementById('statsEasy');
+    if (easyEl) easyEl.textContent = grouped['Easy'].length;
+    
+    const mediumEl = document.getElementById('statsMedium');
+    if (mediumEl) mediumEl.textContent = grouped['Medium'].length;
+    
+    const hardEl = document.getElementById('statsHard');
+    if (hardEl) hardEl.textContent = grouped['Hard'].length;
+    
+    const insaneEl = document.getElementById('statsInsane');
+    if (insaneEl) insaneEl.textContent = grouped['Insane'].length;
+    
+    const extremeEl = document.getElementById('statsExtreme');
+    if (extremeEl) extremeEl.textContent = grouped['Extreme'].length;
+    
     let totalMinutes = 0;
     sessions.forEach(session => {
         totalMinutes += session.minutes;
     });
     const hours = Math.floor(totalMinutes / 60);
     const mins = totalMinutes % 60;
-    document.getElementById('statsTotalTime').textContent = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    const timeEl = document.getElementById('statsTotalTime');
+    if (timeEl) timeEl.textContent = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
     
-    // Average attempts
     let totalAttempts = 0;
     let demonicCount = 0;
     demons.forEach(d => {
@@ -2053,13 +1647,13 @@ function updateDetailedStats() {
         }
     });
     const avgAttempts = demonicCount > 0 ? (totalAttempts / demonicCount).toFixed(1) : '-';
-    document.getElementById('avgAttempts').textContent = avgAttempts;
+    const avgEl = document.getElementById('avgAttempts');
+    if (avgEl) avgEl.textContent = avgAttempts;
     
-    // Completion rate
     const completionRate = demons.length > 0 ? `${demons.length} beaten` : '-';
-    document.getElementById('completionRate').textContent = completionRate;
+    const compEl = document.getElementById('completionRate');
+    if (compEl) compEl.textContent = completionRate;
     
-    // Most active weakness
     let maxWeakness = '-';
     let maxCount = 0;
     Object.entries(weaknesses).forEach(([name, count]) => {
@@ -2068,7 +1662,8 @@ function updateDetailedStats() {
             maxWeakness = name;
         }
     });
-    document.getElementById('mostActiveWeakness').textContent = maxWeakness;
+    const weakEl = document.getElementById('mostActiveWeakness');
+    if (weakEl) weakEl.textContent = maxWeakness;
 }
 
 // ============= WEAKNESS RESET =============
@@ -2078,26 +1673,30 @@ function resetWeaknesses() {
         saveWeaknesses({});
         initWeaknessButtons();
         updateWeaknessStats();
+        updateSettingsBackupStats();
     }, 'Reset');
 }
 
 // ============= CLEAR ALL DATA =============
 
 function clearAllData() {
-    openConfirmModal('⚠️ This will delete ALL your data (goals, demons, sessions, weaknesses). Are you sure?', 'Delete all data', () => {
+    openConfirmModal('⚠️ This will delete ALL your data (goals, demons, sessions, weaknesses, top 10 status). Are you sure?', 'Delete all data', () => {
         openConfirmModal('This action cannot be undone. Delete everything?', 'Final confirmation', () => {
             localStorage.removeItem(GOALS_KEY);
             localStorage.removeItem(DEMONS_KEY);
             localStorage.removeItem(SESSIONS_KEY);
             localStorage.removeItem(WEAKNESSES_KEY);
+            localStorage.removeItem(TOP_10_DEMONS_KEY);
 
             loadGoals();
             loadDemons();
             loadSessions();
             loadWeaknesses();
+            loadDemonList();
             updateAllStats();
+            updateSettingsBackupStats();
 
-            alert('All data has been cleared.');
+            openAlertModal('All tracker data has been cleared.', 'Data Cleared', '🗑️');
         }, 'Delete everything');
     }, 'Continue');
 }
@@ -2114,10 +1713,15 @@ function updateSessionStats() {
     
     const avgMinutes = sessions.length > 0 ? (totalMinutes / sessions.length).toFixed(1) : 0;
     
-    document.getElementById('totalMinutes').textContent = totalMinutes;
-    document.getElementById('avgMinutes').textContent = avgMinutes;
-    document.getElementById('totalSessionCount').textContent = sessions.length;
-    document.getElementById('totalSessions').textContent = sessions.length;
+    const totalMinsEl = document.getElementById('totalMinutes');
+    const avgMinsEl = document.getElementById('avgMinutes');
+    const totalCountEl = document.getElementById('totalSessionCount');
+    const totalSessEl = document.getElementById('totalSessions');
+
+    if (totalMinsEl) totalMinsEl.textContent = totalMinutes;
+    if (avgMinsEl) avgMinsEl.textContent = avgMinutes;
+    if (totalCountEl) totalCountEl.textContent = sessions.length;
+    if (totalSessEl) totalSessEl.textContent = sessions.length;
 }
 
 // ============= WEAKNESS STATS =============
@@ -2125,6 +1729,7 @@ function updateSessionStats() {
 function updateWeaknessStats() {
     const weaknesses = getWeaknesses();
     const statsContainer = document.getElementById('weaknessStats');
+    if (!statsContainer) return;
     
     statsContainer.innerHTML = '';
     
@@ -2148,7 +1753,28 @@ function updateWeaknessStats() {
     }
 }
 
-// ============= IMPORT DATA =============
+// ============= DATA IMPORT & EXPORT =============
+
+function updateSettingsBackupStats() {
+    const goals = getGoals();
+    const demons = getDemons();
+    const sessions = getSessions();
+    const weaknesses = getWeaknesses();
+    const top10Beaten = getTop10Beaten();
+    const statsEl = document.getElementById('backupDataStats');
+
+    if (statsEl) {
+        statsEl.innerHTML = `
+            <span>📋 <strong>${goals.length}</strong> Goals</span>
+            <span class="meta-dot">•</span>
+            <span>👹 <strong>${demons.length}</strong> Demons</span>
+            <span class="meta-dot">•</span>
+            <span>🏋️ <strong>${sessions.length}</strong> Practice Logs</span>
+            <span class="meta-dot">•</span>
+            <span>🔥 <strong>${top10Beaten.length}/10</strong> Top 10 Beaten</span>
+        `;
+    }
+}
 
 function importData() {
     const fileInput = document.createElement('input');
@@ -2172,26 +1798,30 @@ function importData() {
             const demons = Array.isArray(parsed.demons) ? parsed.demons : [];
             const sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
             const weaknesses = parsed.weaknesses && typeof parsed.weaknesses === 'object' ? parsed.weaknesses : {};
+            const top10Beaten = Array.isArray(parsed.top10Beaten) ? parsed.top10Beaten : [];
 
-            openConfirmModal('Import this data and replace the current tracker data?', 'Import data', () => {
+            openConfirmModal('Import this data and replace current tracker data?', 'Import data', () => {
                 localStorage.setItem(GOALS_KEY, JSON.stringify(goals));
                 localStorage.setItem(DEMONS_KEY, JSON.stringify(demons));
                 localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
                 localStorage.setItem(WEAKNESSES_KEY, JSON.stringify(weaknesses));
+                localStorage.setItem(TOP_10_DEMONS_KEY, JSON.stringify(top10Beaten));
 
                 loadGoals();
                 loadDemons();
                 loadSessions();
                 loadWeaknesses();
+                loadDemonList();
                 updateAllStats();
                 renderTierDisplay();
                 renderTierRankDisplay();
+                updateSettingsBackupStats();
 
-                alert('Data imported successfully.');
+                openAlertModal('Data imported successfully.', 'Import Complete', '🎉');
             }, 'Import');
         } catch (error) {
             console.error(error);
-            alert(error.message || 'There was a problem importing that data file.');
+            openAlertModal(error.message || 'There was a problem importing that data file.', 'Import Error', '⚠️');
         }
     });
 
@@ -2200,13 +1830,12 @@ function importData() {
     fileInput.remove();
 }
 
-// ============= EXPORT DATA =============
-
 function exportData() {
     const goals = getGoals();
     const demons = getDemons();
     const sessions = getSessions();
     const weaknesses = getWeaknesses();
+    const top10Beaten = getTop10Beaten();
 
     const data = {
         exportDate: new Date().toLocaleString(),
@@ -2214,10 +1843,12 @@ function exportData() {
         demons: demons,
         sessions: sessions,
         weaknesses: weaknesses,
+        top10Beaten: top10Beaten,
         statistics: {
             totalGoals: goals.length,
             totalDemons: demons.length,
-            totalSessions: sessions.length
+            totalSessions: sessions.length,
+            top10BeatenCount: top10Beaten.length
         }
     };
 
@@ -2234,13 +1865,580 @@ function exportData() {
 // ============= UTILITY FUNCTIONS =============
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// ============= TIER SYSTEM =============
+// ============= GD YOUTUBERS DATA & LOGIC =============
 
+const GD_YOUTUBERS = [
+    {
+        id: 'ethcook',
+        name: '[GD] Ethcook',
+        emoji: '👨‍💻',
+        role: 'Website Creator & Player',
+        category: 'Creators & Hosts',
+        subscribers: 'Creator',
+        description: 'Developer of Geometry Dash Tracker, Sakupen Egg clear, and GD content creator.',
+        tags: ['Website Creator', 'Sakupen Egg', 'GD Developer', 'Tracker Creator'],
+        url: 'https://www.youtube.com/@Ethcook'
+    },
+    {
+        id: 'zoink',
+        name: 'Zoink',
+        emoji: '🌊',
+        role: '#1 Verifier',
+        category: 'Top Players & Verifiers',
+        subscribers: '150K+ Subs',
+        description: 'Undisputed #1 Verifier in Geometry Dash history — Verified Tidal Wave (hardest demon in GD) & Avernus.',
+        tags: ['Tidal Wave Verified', '#1 Demon Verifier', 'Avernus Verified', 'Pointercrate Legend'],
+        url: 'https://www.youtube.com/@Zoink'
+    },
+    {
+        id: 'doggie',
+        name: 'Doggie',
+        emoji: '🐶',
+        role: 'Top Player & Verifier',
+        category: 'Top Players & Verifiers',
+        subscribers: '350K+ Subs',
+        description: 'Verified Acheron (former #1 demon), verifier of Grief, Tidal Wave 100%.',
+        tags: ['Acheron Verified', 'Grief Verifier', 'Tidal Wave 100%', 'Top Demon Slayer'],
+        url: 'https://www.youtube.com/@DoggieDasher'
+    },
+    {
+        id: 'vortrox',
+        name: 'Vortrox',
+        emoji: '⚡',
+        role: 'Content Creator',
+        category: 'Showcase & Entertainment',
+        subscribers: '500K+ Subs',
+        description: 'Zero to Hero series, 100-Hour challenges, extreme demon clears.',
+        tags: ['Zero to Hero', '100-Hour Challenge', 'Extreme Demons', 'Entertainer'],
+        url: 'https://www.youtube.com/@Vortrox'
+    },
+    {
+        id: 'denni',
+        name: 'Denni',
+        emoji: '🎭',
+        role: 'Commentator & Player',
+        category: 'Showcase & Entertainment',
+        subscribers: '100K+ Subs',
+        description: 'Demon level reactions, challenges, and commentary.',
+        tags: ['Demon Reactions', 'GD Challenges', 'Commentary', 'Community Leader'],
+        url: 'https://www.youtube.com/@fakedenni'
+    },
+    {
+        id: 'trick',
+        name: 'Trick',
+        emoji: '🎩',
+        role: 'Top Player & Verifier',
+        category: 'Top Players & Verifiers',
+        subscribers: '200K+ Subs',
+        description: 'Verified Silent Clubstep, Acheron 100%, Firework 100%.',
+        tags: ['Silent Clubstep Verified', 'Acheron 100%', 'Firework 100%', 'Top Verifier'],
+        url: 'https://www.youtube.com/@TrickGMD'
+    },
+    {
+        id: 'npesta',
+        name: 'npesta',
+        emoji: '👓',
+        role: 'Top Player & Streamer',
+        category: 'Top Players & Verifiers',
+        subscribers: '400K+ Subs',
+        description: 'Verified Deimos, Kowareta 100%, iconic GD reactions.',
+        tags: ['Deimos Verified', 'Kowareta 100%', 'Iconic Reactions', 'Technical Player'],
+        url: 'https://www.youtube.com/@npesta'
+    },
+    {
+        id: 'technical',
+        name: 'Technical',
+        emoji: '⚙️',
+        role: 'Top Verifier & Player',
+        category: 'Top Players & Verifiers',
+        subscribers: '250K+ Subs',
+        description: 'Verified Zodiac & Tartarus, top Demon List victories.',
+        tags: ['Zodiac Verified', 'Tartarus Verified', 'Demon List Legend', 'Top Slayer'],
+        url: 'https://www.youtube.com/@TechnicalJL'
+    },
+    {
+        id: 'gdcolon',
+        name: 'GD Colon',
+        emoji: '🦊',
+        role: 'Tool Developer & Creator',
+        category: 'Creators & Hosts',
+        subscribers: '600K+ Subs',
+        description: 'GD browser tools, GDBrowser.com, video essays.',
+        tags: ['GDBrowser', 'Tool Developer', 'Video Essays', 'GD Modder'],
+        url: 'https://www.youtube.com/@GDColon'
+    },
+    {
+        id: 'nexus',
+        name: 'Nexus',
+        emoji: '💎',
+        role: 'Showcase Creator',
+        category: 'Showcase & Entertainment',
+        subscribers: '500K+ Subs',
+        description: '100% level showcases and official updates.',
+        tags: ['Level Showcases', '100% Completions', 'Update News', 'Clean Edits'],
+        url: 'https://www.youtube.com/@NexusGD10'
+    },
+    {
+        id: 'viprin',
+        name: 'Viprin',
+        emoji: '👑',
+        role: 'Collab Host & Legend',
+        category: 'Creators & Hosts',
+        subscribers: '600K+ Subs',
+        description: 'Host of Bloodbath, Artificial Ascent, Digital Descent.',
+        tags: ['Bloodbath Host', 'Artificial Ascent', 'Mega Collab Host', 'GD Award Winner'],
+        url: 'https://www.youtube.com/@Viprin'
+    },
+    {
+        id: 'riot',
+        name: 'Riot',
+        emoji: '🔥',
+        role: 'Original Legend',
+        category: 'Top Players & Verifiers',
+        subscribers: '300K+ Subs',
+        description: 'Original legend who verified Bloodbath & Cataclysm.',
+        tags: ['Bloodbath Verified', 'Cataclysm Verified', 'Original Legend', 'GD Pioneer'],
+        url: 'https://www.youtube.com/@Riottt'
+    },
+    {
+        id: 'partitionzion',
+        name: 'Partition Zion',
+        emoji: '🌟',
+        role: 'Guide & Spotlight Creator',
+        category: 'Showcase & Entertainment',
+        subscribers: '900K+ Subs',
+        description: 'Secret coin guides, 2.2 updates, level spotlights.',
+        tags: ['Secret Coin Guides', '2.2 Updates', 'Level Spotlights', 'Walkthroughs'],
+        url: 'https://www.youtube.com/@PartitionSion'
+    }
+];
+
+let selectedYouTuberCategory = 'All';
+
+function setYouTuberCategory(cat) {
+    selectedYouTuberCategory = cat;
+    const btns = document.querySelectorAll('#youtuberCategoryFilters .filter-btn');
+    btns.forEach(btn => {
+        if (btn.textContent.trim() === cat) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+    filterYouTubers();
+}
+
+function filterYouTubers() {
+    const input = document.getElementById('youtuberSearchInput');
+    const query = input ? input.value.trim().toLowerCase() : '';
+    const grid = document.getElementById('youtubersGrid');
+    if (!grid) return;
+
+    const filtered = GD_YOUTUBERS.filter(item => {
+        const matchesCategory = selectedYouTuberCategory === 'All' || item.category === selectedYouTuberCategory;
+        if (!matchesCategory) return false;
+        if (!query) return true;
+
+        const textSearch = `${item.name} ${item.role} ${item.description} ${item.tags.join(' ')} ${item.subscribers}`.toLowerCase();
+        return textSearch.includes(query);
+    });
+
+    grid.innerHTML = '';
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="empty-message">No YouTubers or creators match your search.</div>';
+        return;
+    }
+
+    filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'youtuber-card';
+        card.innerHTML = `
+            <div class="youtuber-card-header">
+                <div class="youtuber-avatar">${item.emoji}</div>
+                <div class="youtuber-title-box">
+                    <h3 class="youtuber-name">${escapeHtml(item.name)}</h3>
+                    <div class="youtuber-badges">
+                        <span class="badge role-badge">${escapeHtml(item.role)}</span>
+                        <span class="badge sub-badge">📈 ${escapeHtml(item.subscribers)}</span>
+                    </div>
+                </div>
+            </div>
+            <p class="youtuber-description">${escapeHtml(item.description)}</p>
+            <div class="youtuber-tags">
+                ${item.tags.map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}
+            </div>
+            <div class="youtuber-card-footer">
+                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-small watch-btn">
+                    ▶ Watch on YouTube
+                </a>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function loadYouTubers() {
+    filterYouTubers();
+}
+
+// ============= DEMON LIST TOP 10 DATA & LOGIC =============
+
+const TOP_10_DEMONS = [
+    { rank: 1, name: 'Society', creator: 'Neomar', verifier: 'bilan', difficulty: 'Extreme Demon' },
+    { rank: 2, name: 'Thinking Space II', creator: 'CairoX', verifier: 'CairoX', difficulty: 'Extreme Demon' },
+    { rank: 3, name: 'Flamewall', creator: 'Narwall', verifier: 'Narwall', difficulty: 'Extreme Demon' },
+    { rank: 4, name: 'Amethyst', creator: 'iMist', verifier: 'iMist', difficulty: 'Extreme Demon' },
+    { rank: 5, name: 'Tidal Wave', creator: 'OniLink', verifier: 'Zoink', difficulty: 'Extreme Demon' },
+    { rank: 6, name: 'Green Bullet', creator: 'cherryteam', verifier: 'cherryteam', difficulty: 'Extreme Demon' },
+    { rank: 7, name: 'ORBIT', creator: 'MindCap', verifier: 'MindCap', difficulty: 'Extreme Demon' },
+    { rank: 8, name: 'Nullscapes', creator: 'Kiba', verifier: 'Zoink', difficulty: 'Extreme Demon' },
+    { rank: 9, name: 'Quanteuse processing', creator: 'Renn241', verifier: 'Renn241', difficulty: 'Extreme Demon' },
+    { rank: 10, name: 'BOOBAWAMBA', creator: 'Akunakunn', verifier: 'Akunakunn', difficulty: 'Extreme Demon' }
+];
+
+let selectedDemonListCategory = 'All Top 10';
+
+function getTop10Beaten() {
+    return getStoredData(TOP_10_DEMONS_KEY, []);
+}
+
+function saveTop10Beaten(beatenRanks) {
+    saveStoredData(TOP_10_DEMONS_KEY, beatenRanks);
+}
+
+function toggleTop10Beaten(rank) {
+    let beaten = getTop10Beaten();
+    if (beaten.includes(rank)) {
+        beaten = beaten.filter(r => r !== rank);
+    } else {
+        beaten.push(rank);
+    }
+    saveTop10Beaten(beaten);
+    loadDemonList();
+    updateSettingsBackupStats();
+}
+
+function setDemonListCategory(cat) {
+    selectedDemonListCategory = cat;
+    const btns = document.querySelectorAll('#demonListCategoryFilters .filter-btn');
+    btns.forEach(btn => {
+        if (btn.textContent.trim() === cat) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+    filterDemonList();
+}
+
+function filterDemonList() {
+    const input = document.getElementById('demonListSearchInput');
+    const query = input ? input.value.trim().toLowerCase() : '';
+    const grid = document.getElementById('demonListGrid');
+    const beatenList = getTop10Beaten();
+
+    if (!grid) return;
+
+    const countBeaten = beatenList.length;
+    const countEl = document.getElementById('top10BeatenCount');
+    const percentEl = document.getElementById('top10PercentText');
+    const fillEl = document.getElementById('top10ProgressFill');
+
+    if (countEl) countEl.textContent = `${countBeaten} / 10 Beaten`;
+    const pct = Math.round((countBeaten / 10) * 100);
+    if (percentEl) percentEl.textContent = `${pct}%`;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+
+    const filtered = TOP_10_DEMONS.filter(item => {
+        const isBeaten = beatenList.includes(item.rank);
+
+        if (selectedDemonListCategory === 'Top 3 Elite' && item.rank > 3) return false;
+        if (selectedDemonListCategory === 'My Beaten Demons' && !isBeaten) return false;
+
+        if (!query) return true;
+        const searchStr = `#${item.rank} ${item.name} ${item.creator} ${item.verifier}`.toLowerCase();
+        return searchStr.includes(query);
+    });
+
+    grid.innerHTML = '';
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="empty-message">No demons match your selected filter or search.</div>';
+        return;
+    }
+
+    filtered.forEach(item => {
+        const isBeaten = beatenList.includes(item.rank);
+        const card = document.createElement('div');
+        card.className = `demonlist-card rank-${item.rank}` + (isBeaten ? ' beaten' : '');
+        card.innerHTML = `
+            <div class="demonlist-rank-badge">#${item.rank}</div>
+            <div class="demonlist-card-content">
+                <div class="demonlist-title-row">
+                    <h3 class="demonlist-level-name">⭐ ${escapeHtml(item.name)}</h3>
+                    <span class="badge extreme-badge">Extreme Demon</span>
+                </div>
+                <div class="demonlist-meta-row">
+                    <span>By <strong>${escapeHtml(item.creator)}</strong></span>
+                    <span class="meta-dot">•</span>
+                    <span>Verified by <strong>${escapeHtml(item.verifier)}</strong></span>
+                </div>
+            </div>
+            <div class="demonlist-card-action">
+                <button 
+                    onclick="toggleTop10Beaten(${item.rank})" 
+                    class="btn btn-small ${isBeaten ? 'btn-success beaten-btn' : 'btn-secondary'}"
+                >
+                    ${isBeaten ? '✓ Beaten' : 'Mark as Beaten'}
+                </button>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function loadDemonList() {
+    filterDemonList();
+}
+
+// ============= USERNAME & PROFILE =============
+
+function getUsername() {
+    return localStorage.getItem(USERNAME_KEY) || DEFAULT_USERNAME;
+}
+
+function persistUsernameDraft() {
+    const input = document.getElementById('usernameInput');
+    if (!input) return;
+    const value = input.value.trim() || DEFAULT_USERNAME;
+    const headerMeta = document.getElementById('welcomeMessage');
+    if (headerMeta) {
+        headerMeta.textContent = `Welcome, ${value}`;
+    }
+}
+
+function saveUsername() {
+    const input = document.getElementById('usernameInput');
+    if (!input) return;
+    const value = input.value.trim();
+
+    if (!value) {
+        openAlertModal('Please enter a username.', 'Username Required', '👤');
+        return;
+    }
+
+    localStorage.setItem(USERNAME_KEY, value);
+    persistUsernameDraft();
+    saveProfileToServer({ username: value });
+
+    const msg = document.getElementById('settingsMessage');
+    if (msg) msg.textContent = 'Username saved successfully!';
+}
+
+function getPfpImage() {
+    return localStorage.getItem(PFP_IMAGE_KEY) || '';
+}
+
+function renderPfp() {
+    const pfp = getPfpImage();
+    const headerAvatar = document.getElementById('headerAvatar');
+    const settingsPreview = document.getElementById('settingsAvatarPreview');
+
+    const defaultSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">🤖</text></svg>`;
+
+    if (headerAvatar) {
+        headerAvatar.innerHTML = pfp ? `<img src="${pfp}" alt="Avatar">` : defaultSvg;
+    }
+    if (settingsPreview) {
+        settingsPreview.innerHTML = pfp ? `<img src="${pfp}" alt="Avatar">` : defaultSvg;
+    }
+}
+
+function handlePfpUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+        openAlertModal('Please select an image file.', 'Invalid File', '🖼️');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const base64 = e.target?.result;
+        if (typeof base64 === 'string') {
+            localStorage.setItem(PFP_IMAGE_KEY, base64);
+            renderPfp();
+            saveProfileToServer({ pfpImage: base64 });
+            const msg = document.getElementById('settingsMessage');
+            if (msg) msg.textContent = 'Profile picture updated!';
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearPfpImage() {
+    localStorage.removeItem(PFP_IMAGE_KEY);
+    renderPfp();
+    saveProfileToServer({ pfpImage: '' });
+    const msg = document.getElementById('settingsMessage');
+    if (msg) msg.textContent = 'Profile picture removed.';
+}
+
+// Player ID and Profile Sync
+function ensurePlayerId() {
+    let pid = localStorage.getItem(PLAYER_ID_KEY);
+    if (!pid) {
+        pid = 'player_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem(PLAYER_ID_KEY, pid);
+    }
+    return pid;
+}
+
+async function loadProfileFromServer() {
+    renderPfp();
+    const pid = ensurePlayerId();
+    try {
+        const res = await fetch(`/api/profiles/${encodeURIComponent(pid)}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.username) {
+                localStorage.setItem(USERNAME_KEY, data.username);
+                const usernameInput = document.getElementById('usernameInput');
+                if (usernameInput) usernameInput.value = data.username;
+                persistUsernameDraft();
+            }
+            if (data.pfpImage) {
+                localStorage.setItem(PFP_IMAGE_KEY, data.pfpImage);
+                renderPfp();
+            }
+        }
+    } catch {
+        // Fallback to local data if offline or server API isn't running
+    }
+}
+
+async function saveProfileToServer(updates = {}) {
+    const pid = ensurePlayerId();
+    const username = updates.username !== undefined ? updates.username : getUsername();
+    const pfpImage = updates.pfpImage !== undefined ? updates.pfpImage : getPfpImage();
+
+    try {
+        await fetch('/api/profiles', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playerId: pid, username, pfpImage })
+        });
+    } catch {
+        // Silently preserve local storage
+    }
+}
+
+// Dark Mode Toggle
+function initDarkMode() {
+    const isDark = localStorage.getItem(DARK_MODE_KEY) === 'true';
+    const toggle = document.getElementById('darkModeToggle');
+    if (toggle) toggle.checked = isDark;
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+}
+
+function toggleDarkMode(isDark) {
+    localStorage.setItem(DARK_MODE_KEY, String(isDark));
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+}
+
+// Chatbot functionality
+function loadChatHistory() {
+    chatMessages = getStoredData(CHAT_HISTORY_KEY, []);
+    renderChatMessages();
+}
+
+function saveChatHistory() {
+    saveStoredData(CHAT_HISTORY_KEY, chatMessages);
+}
+
+function renderChatMessages() {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (chatMessages.length === 0) {
+        container.innerHTML = '<div class="chat-empty" id="chatEmpty">Start a conversation by asking a question below.</div>';
+        return;
+    }
+
+    chatMessages.forEach(msg => {
+        const div = document.createElement('div');
+        div.className = `chat-message ${msg.role === 'user' ? 'user-message' : 'assistant-message'}`;
+        div.innerHTML = `<div class="chat-bubble">${escapeHtml(msg.content)}</div>`;
+        container.appendChild(div);
+    });
+
+    container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+    if (chatRequestPending) return;
+    const input = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendChatBtn');
+    const errorEl = document.getElementById('chatError');
+
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (errorEl) errorEl.textContent = '';
+
+    chatMessages.push({ role: 'user', content: text });
+    if (chatMessages.length > CHAT_MAX_MESSAGES) {
+        chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
+    }
+    saveChatHistory();
+    renderChatMessages();
+
+    input.value = '';
+    chatRequestPending = true;
+    if (sendBtn) sendBtn.disabled = true;
+
+    try {
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: chatMessages })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Server error.');
+
+        chatMessages.push({ role: 'assistant', content: data.reply });
+        if (chatMessages.length > CHAT_MAX_MESSAGES) {
+            chatMessages = chatMessages.slice(-CHAT_MAX_MESSAGES);
+        }
+        saveChatHistory();
+        renderChatMessages();
+    } catch (err) {
+        if (errorEl) errorEl.textContent = err.message;
+    } finally {
+        chatRequestPending = false;
+        if (sendBtn) sendBtn.disabled = false;
+    }
+}
+
+function clearChat() {
+    chatMessages = [];
+    saveChatHistory();
+    renderChatMessages();
+    const errorEl = document.getElementById('chatError');
+    if (errorEl) errorEl.textContent = '';
+}
+
+// TIER SYSTEM IMPLEMENTATION
 const TIER_DEFINITIONS = [
     {
         name: 'Admins & Owners',
@@ -2330,12 +2528,7 @@ function getEffectiveTierDefinitions() {
     if (isAdminOwnerTierDeleted()) {
         return TIER_DEFINITIONS.filter(tier => tier.name !== 'Admins & Owners');
     }
-
     return TIER_DEFINITIONS;
-}
-
-function getProgressionTierDefinitions() {
-    return getEffectiveTierDefinitions();
 }
 
 function getUnlockedTierDefinitions() {
@@ -2343,7 +2536,6 @@ function getUnlockedTierDefinitions() {
     if (isAdminOwnerTierUnlocked()) {
         return visible;
     }
-
     return visible.filter(tier => tier.name !== 'Admins & Owners');
 }
 
@@ -2355,17 +2547,9 @@ function syncAdminOwnerControls() {
     const deleted = isAdminOwnerTierDeleted();
     const unlocked = isAdminOwnerTierUnlocked();
 
-    if (deleteBtn) {
-        deleteBtn.disabled = deleted || !unlocked;
-    }
-
-    if (unlockBtn) {
-        unlockBtn.disabled = unlocked;
-    }
-
-    if (codeInput) {
-        codeInput.disabled = unlocked;
-    }
+    if (deleteBtn) deleteBtn.disabled = deleted || !unlocked;
+    if (unlockBtn) unlockBtn.disabled = unlocked;
+    if (codeInput) codeInput.disabled = unlocked;
 }
 
 function deleteAdminOwnerTier() {
@@ -2380,7 +2564,7 @@ function deleteAdminOwnerTier() {
         return;
     }
 
-    openConfirmModal('Are you sure you want to delete the Admins & Owners rank? This removes it from the progression and clears its unlock state.', 'Delete Admins & Owners rank', () => {
+    openConfirmModal('Are you sure you want to delete the Admins & Owners rank?', 'Delete Admins & Owners rank', () => {
         localStorage.setItem(ADMIN_OWNER_DELETED_KEY, 'true');
         localStorage.removeItem(ADMIN_OWNER_UNLOCKED_KEY);
 
@@ -2429,7 +2613,6 @@ function calculatePlayerTier() {
     const sessions = getSessions();
     const grouped = groupDemonsByDifficulty(demons);
     
-    // Calculate metrics
     const totalDemonsBeaten = demons.length;
     const extremeDemonsBeaten = grouped['Extreme'].length;
     const insaneDemonsBeaten = grouped['Insane'].length;
@@ -2458,7 +2641,6 @@ function calculatePlayerTier() {
 
     const effectiveTiers = getUnlockedTierDefinitions();
     
-    // Find the appropriate tier
     for (let tierDef of effectiveTiers) {
         const req = tierDef.requirements;
         const meetsRequirements = 
@@ -2475,7 +2657,6 @@ function calculatePlayerTier() {
         }
     }
     
-    // Return Bronze as default
     return {
         tier: effectiveTiers[effectiveTiers.length - 1] || TIER_DEFINITIONS[TIER_DEFINITIONS.length - 1],
         metrics
@@ -2505,7 +2686,6 @@ function getTierProgress() {
         totalPracticeTime += session.minutes;
     });
     
-    // If already at the highest unlocked tier, show completion
     if (currentTierIndex === 0) {
         return {
             currentTier: currentTierInfo.tier,
@@ -2515,7 +2695,6 @@ function getTierProgress() {
         };
     }
     
-    // Get next tier requirements
     const nextTierIndex = currentTierIndex - 1;
     const nextTier = effectiveTiers[nextTierIndex];
     const nextReq = nextTier.requirements;
@@ -2524,7 +2703,6 @@ function getTierProgress() {
     const extremeDemonsBeaten = grouped['Extreme'].length;
     const insaneDemonsBeaten = grouped['Insane'].length;
     
-    // Calculate progress to next tier
     const demonProgress = Math.min(totalDemonsBeaten / nextReq.minDemonsBeaten, 1);
     const extremeProgress = nextReq.extremeDemonsBeaten > 0 ? 
         Math.min(extremeDemonsBeaten / nextReq.extremeDemonsBeaten, 1) : 1;
@@ -2649,12 +2827,11 @@ function renderTierRankDisplay() {
     const effectiveTiers = getEffectiveTierDefinitions();
     const reversedTiers = [...effectiveTiers].reverse();
     
-    reversedTiers.forEach((tier, index) => {
+    reversedTiers.forEach((tier) => {
         const isCurrentTier = tier.name === currentTierName;
         const isAdminOwner = tier.name === 'Admins & Owners';
         const isLocked = isAdminOwner && !isAdminOwnerTierUnlocked();
         const isUnlocked = isAdminOwner && isAdminOwnerTierUnlocked();
-        const tierPosition = reversedTiers.length - index;
         
         rankHTML += `
             <div class="tier-rank-item ${isCurrentTier ? 'active' : ''} ${isLocked ? 'locked' : ''} ${isUnlocked ? 'unlocked-owner-tier' : ''}" title="${tier.name}: ${tier.description}">

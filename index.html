@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Geometry Dash Tracker</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🤖</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -52,10 +55,12 @@
                     </div>
                 </details>
 
-                <details class="nav-dropdown">
+                <details class="nav-dropdown" open>
                     <summary class="nav-summary"><span class="nav-summary-icon">🛠️</span><span>Tools</span></summary>
                     <div class="nav-dropdown-items">
                         <button class="nav-btn" onclick="switchPage('tools')" title="Tools">🛠️ <span>Tools</span></button>
+                        <button class="nav-btn" onclick="switchPage('youtubers')" title="GD YouTubers">📺 <span>GD YouTubers</span></button>
+                        <button class="nav-btn" onclick="switchPage('demonlist')" title="Demon List Top 10">🔥 <span>Demon List Top 10</span></button>
                         <button class="nav-btn" onclick="switchPage('iconmachine')" title="GD Icon Machine">🎨 <span>GD Icon Machine</span></button>
                         <button class="nav-btn" onclick="switchPage('chatbot')" title="The GD Chatbot">🤖 <span>The GD Chatbot</span></button>
                     </div>
@@ -359,7 +364,7 @@
                         <h2>🎯 Weakness Tracker</h2>
                     </div>
 
-                    <p style="margin-bottom: 20px; font-size: 0.95em; color: #666;">Click on mechanics you struggle with to track them. Track your improvement over time!</p>
+                    <p style="margin-bottom: 20px; font-size: 0.95em; color: var(--text-soft);">Click on mechanics you struggle with to track them. Track your improvement over time!</p>
 
                     <div class="weakness-grid" id="weaknessGrid">
                         <!-- Weakness buttons will be generated here -->
@@ -487,28 +492,139 @@
                 </section>
             </div>
 
-            <!-- Tools Page -->
+            <!-- Tools Overview Page -->
             <div id="tools-page" class="page">
                 <section class="section tools-section">
                     <div class="section-header">
-                        <h2>🛠️ Tools</h2>
+                        <h2>🛠️ Geometry Dash Tools & Resources</h2>
+                        <p class="meta">Explore curated tools, YouTubers, Demon List trackers, and community hubs.</p>
                     </div>
 
                     <div class="tools-grid">
+                        <div class="tool-card internal-tool-card" onclick="switchPage('youtubers')">
+                            <div class="tool-card-icon">📺</div>
+                            <h3>GD YouTubers</h3>
+                            <p>Browse curated GD creators, verifiers, and video producers with YouTube links.</p>
+                            <button class="btn btn-small btn-primary">Open YouTubers</button>
+                        </div>
+
+                        <div class="tool-card internal-tool-card" onclick="switchPage('demonlist')">
+                            <div class="tool-card-icon">🔥</div>
+                            <h3>Demon List (Top 10)</h3>
+                            <p>Track your completion progress across the top 10 hardest extreme demons in GD.</p>
+                            <button class="btn btn-small btn-primary">Open Demon List</button>
+                        </div>
+
+                        <div class="tool-card internal-tool-card" onclick="switchPage('iconmachine')">
+                            <div class="tool-card-icon">🎨</div>
+                            <h3>GD Icon Machine</h3>
+                            <p>Collect, customize, name, and showcase your custom GD icons.</p>
+                            <button class="btn btn-small btn-primary">Open Icon Machine</button>
+                        </div>
+
+                        <div class="tool-card internal-tool-card" onclick="switchPage('chatbot')">
+                            <div class="tool-card-icon">🤖</div>
+                            <h3>The GD Chatbot</h3>
+                            <p>Ask questions and get instant advice from the AI Geometry Dash assistant.</p>
+                            <button class="btn btn-small btn-primary">Open Chatbot</button>
+                        </div>
+
                         <a href="https://pointercrate.com/demonlist/" target="_blank" rel="noopener noreferrer" class="tool-card">
+                            <div class="tool-card-icon">🏆</div>
                             <h3>Pointercrate Demon List</h3>
-                            <p>Open the Pointercrate demon list website.</p>
+                            <p>Official ranking of the hardest Geometry Dash levels.</p>
                         </a>
 
                         <a href="https://gddp.pro/" target="_blank" rel="noopener noreferrer" class="tool-card">
-                            <h3>Geometry Dash Demon Progression</h3>
-                            <p>Visit the Geometry Dash Demon Progression website.</p>
+                            <div class="tool-card-icon">📈</div>
+                            <h3>GD Demon Progression</h3>
+                            <p>Structured progression tiers from beginner to extreme demon levels.</p>
                         </a>
 
                         <a href="https://www.gdcolon.com/" target="_blank" rel="noopener noreferrer" class="tool-card">
-                            <h3>GD Colon</h3>
-                            <p>Visit GD Colon’s website.</p>
+                            <div class="tool-card-icon">🦊</div>
+                            <h3>GD Colon Tools</h3>
+                            <p>Interactive web apps, level browser, audio converters, and video essays.</p>
                         </a>
+                    </div>
+                </section>
+            </div>
+
+            <!-- GD YouTubers Page -->
+            <div id="youtubers-page" class="page">
+                <section class="section youtubers-section">
+                    <div class="section-header">
+                        <div>
+                            <h2>📺 Geometry Dash YouTubers & Creators</h2>
+                            <p class="meta">Curated roster of top players, verifiers, creators, and community icons.</p>
+                        </div>
+                    </div>
+
+                    <div class="youtubers-controls">
+                        <div class="search-box">
+                            <input 
+                                type="text" 
+                                id="youtuberSearchInput" 
+                                placeholder="Search creator name, role, badge, or achievements..." 
+                                oninput="filterYouTubers()"
+                            >
+                        </div>
+                        <div class="category-filters" id="youtuberCategoryFilters">
+                            <button class="filter-btn active" onclick="setYouTuberCategory('All')">All</button>
+                            <button class="filter-btn" onclick="setYouTuberCategory('Top Players & Verifiers')">Top Players & Verifiers</button>
+                            <button class="filter-btn" onclick="setYouTuberCategory('Creators & Hosts')">Creators & Hosts</button>
+                            <button class="filter-btn" onclick="setYouTuberCategory('Showcase & Entertainment')">Showcase & Entertainment</button>
+                        </div>
+                    </div>
+
+                    <div id="youtubersGrid" class="youtubers-grid">
+                        <!-- YouTuber cards will be rendered dynamically here -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Demon List Top 10 Page -->
+            <div id="demonlist-page" class="page">
+                <section class="section demonlist-section">
+                    <div class="section-header demonlist-header">
+                        <div>
+                            <h2>🔥 Pointercrate Demon List (Top 10)</h2>
+                            <p class="meta">The hardest official Extreme Demons in Geometry Dash history.</p>
+                        </div>
+                        <div class="demonlist-counter-badge">
+                            <span class="counter-label">Completion Status</span>
+                            <span class="counter-val" id="top10BeatenCount">0 / 10 Beaten</span>
+                        </div>
+                    </div>
+
+                    <div class="demonlist-progress-card">
+                        <div class="demonlist-progress-header">
+                            <span>Top 10 Extreme Demons Beaten</span>
+                            <span id="top10PercentText">0%</span>
+                        </div>
+                        <div class="demonlist-progress-bar">
+                            <div id="top10ProgressFill" class="demonlist-progress-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="demonlist-controls">
+                        <div class="search-box">
+                            <input 
+                                type="text" 
+                                id="demonListSearchInput" 
+                                placeholder="Search level name, creator, or verifier..." 
+                                oninput="filterDemonList()"
+                            >
+                        </div>
+                        <div class="category-filters" id="demonListCategoryFilters">
+                            <button class="filter-btn active" onclick="setDemonListCategory('All Top 10')">All Top 10</button>
+                            <button class="filter-btn" onclick="setDemonListCategory('Top 3 Elite')">Top 3 Elite</button>
+                            <button class="filter-btn" onclick="setDemonListCategory('My Beaten Demons')">My Beaten Demons</button>
+                        </div>
+                    </div>
+
+                    <div id="demonListGrid" class="demonlist-grid">
+                        <!-- Top 10 Demon cards will be rendered dynamically here -->
                     </div>
                 </section>
             </div>
@@ -573,47 +689,88 @@
             <div id="settings-page" class="page">
                 <section class="section settings-section">
                     <div class="section-header">
-                        <h2>⚙️ Settings</h2>
+                        <div>
+                            <h2>⚙️ Settings & Data Backup</h2>
+                            <p class="meta">Manage your profile, theme appearance, and backup/restore your tracker data.</p>
+                        </div>
                     </div>
 
-                    <div class="settings-card">
-                        <label for="usernameInput">Username</label>
-                        <div class="input-group">
-                            <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="30">
-                            <button onclick="saveUsername()" class="btn btn-primary">Save Username</button>
-                        </div>
-
-                        <div class="avatar-preview-card">
-                            <div class="avatar-preview" id="settingsAvatarPreview"></div>
-                            <div class="avatar-preview-label">Your profile picture</div>
-                        </div>
-
-                        <label for="pfpUpload" class="upload-label">Upload an image</label>
-                        <input type="file" id="pfpUpload" accept="image/*" onchange="handlePfpUpload(event)">
-
-                        <div class="settings-row">
-                            <label for="darkModeToggle">Dark mode</label>
-                            <label class="switch">
-                                <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode(this.checked)">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="settings-row settings-data-row">
-                            <div>
-                                <div class="settings-label-title">Data Management</div>
-                                <div class="meta">Export or import all saved tracker data.</div>
+                    <div class="settings-grid">
+                        <!-- Profile Settings Card -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-icon">👤</span>
+                                <h3>Profile Settings</h3>
                             </div>
-                            <div class="button-group vertical-button-group">
-                                <button onclick="importData()" class="btn btn-primary btn-small">📤 Import All Data</button>
-                                <button onclick="exportData()" class="btn btn-primary btn-small">📥 Export All Data</button>
-                                <button onclick="clearAllData()" class="btn btn-danger btn-small">🗑️ Clear All Data</button>
+                            
+                            <div class="form-group">
+                                <label for="usernameInput">Display Username</label>
+                                <div class="input-group">
+                                    <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="30">
+                                    <button onclick="saveUsername()" class="btn btn-primary">Save Username</button>
+                                </div>
+                            </div>
+
+                            <div class="avatar-section">
+                                <div class="avatar-preview-card">
+                                    <div class="avatar-preview" id="settingsAvatarPreview"></div>
+                                    <div class="avatar-preview-label">Your Profile Avatar</div>
+                                </div>
+
+                                <div class="avatar-upload-actions">
+                                    <label for="pfpUpload" class="upload-label btn btn-secondary btn-small">📁 Upload Picture</label>
+                                    <input type="file" id="pfpUpload" accept="image/*" onchange="handlePfpUpload(event)" style="display:none;">
+                                    <button onclick="clearPfpImage()" class="btn btn-danger btn-small">Remove Picture</button>
+                                </div>
                             </div>
                         </div>
 
-                        <button onclick="clearPfpImage()" class="btn btn-danger btn-small" style="margin-top: 16px;">Remove Picture</button>
-                        <p id="settingsMessage" class="settings-message">Your preferences are saved automatically.</p>
+                        <!-- Appearance Settings Card -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-icon">🎨</span>
+                                <h3>Appearance & Interface</h3>
+                            </div>
+
+                            <div class="settings-row">
+                                <div>
+                                    <div class="settings-label-title">Dark Mode Theme</div>
+                                    <div class="meta">Switch between high-contrast dark theme and clean light theme.</div>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode(this.checked)">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Dedicated Data Backup & Recovery Card -->
+                        <div class="settings-card backup-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-icon">📦</span>
+                                <h3>Data Import & Export</h3>
+                            </div>
+                            <p class="meta">Save a full JSON backup of your goals, beaten demons, practice logs, top 10 status, and weaknesses, or restore them anytime.</p>
+
+                            <div class="backup-stats-badge" id="backupDataStats">
+                                📊 Checking tracker state...
+                            </div>
+
+                            <div class="backup-actions-grid">
+                                <button onclick="importData()" class="btn btn-primary">
+                                    <span>📤</span> Import Data (JSON)
+                                </button>
+                                <button onclick="exportData()" class="btn btn-secondary">
+                                    <span>📥</span> Export Backup (JSON)
+                                </button>
+                                <button onclick="clearAllData()" class="btn btn-danger">
+                                    <span>🗑️</span> Clear All Data
+                                </button>
+                            </div>
+                        </div>
                     </div>
+
+                    <p id="settingsMessage" class="settings-message">Your preferences are saved automatically.</p>
                 </section>
             </div>
         </div>
@@ -748,6 +905,19 @@
             <div class="modal-buttons">
                 <button id="confirmModalCancel" onclick="closeConfirmModal()" class="btn btn-secondary">Cancel</button>
                 <button id="confirmModalConfirm" onclick="commitConfirmModal()" class="btn btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert Modal -->
+    <div id="alertModal" class="modal">
+        <div class="modal-content alert-modal-content">
+            <span class="close" onclick="closeAlertModal()">&times;</span>
+            <div class="modal-icon-preview alert-modal-icon" id="alertModalIcon">ℹ️</div>
+            <h2 id="alertModalTitle">Notice</h2>
+            <div class="modal-message" id="alertModalMessage">Notification text goes here.</div>
+            <div class="modal-buttons">
+                <button onclick="closeAlertModal()" class="btn btn-primary" id="alertModalOkBtn">OK</button>
             </div>
         </div>
     </div>
